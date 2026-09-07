@@ -58,7 +58,9 @@ commands, the flush after the response and the ActiveRecord observer. Configure 
 'indexnowkit/yii3' => [
     'key' => $_ENV['INDEXNOW_KEY'] ?? null,     // or leave it: the package reads INDEXNOW_KEY itself
     'base_url' => 'https://www.example.com',    // used by console commands (no request to take the host from)
-    'dry_run' => $_ENV['YII_ENV'] !== 'prod',   // dev/staging: log the request, send nothing (check fails when this is unset outside production)
+    // dev/staging: log the request, send nothing. Compare with the same list `production_environments` holds,
+    // or `YII_ENV=production` would switch dry-run on in production (check fails when this is unset outside it).
+    'dry_run' => !in_array($_ENV['YII_ENV'] ?? null, ['prod', 'production'], true),
 ],
 ```
 
@@ -136,8 +138,11 @@ final class Post extends ActiveRecord
 | `events`, `locales`, `host`, `name` | subset of events; `current`/`all`/list (`router.locales`); another host; stable rule id |
 
 Accessors read ActiveRecord properties and relations (`category.slug`, a `get<Name>Query()` relation) and fall back
-to methods. A `when` column that only has a **database** default is null on a fresh record until `loadDefaultValues()`:
-give the typed property a default (`public bool $published = true;`) as above.
+to methods. **`via:` and any dotted path through a relation need `MagicRelationsTrait`** next to `EventsTrait`, as in
+the model above: yiisoft/active-record reads a `get<Name>Query()` relation by name only through that trait, and
+without it the rule fails with an error from the core instead of yielding the related pages. A `when` column that
+only has a **database** default is null on a fresh record until `loadDefaultValues()`: give the typed property a
+default (`public bool $published = true;`) as above.
 
 Classes you cannot annotate: `'active_record' => ['models' => [Product::class]]` in the params (the class still needs
 `EventsTrait`), or `$indexNow->observe(Product::class, [new IndexNow(...)])` at runtime.
@@ -266,6 +271,8 @@ URL was or was not submitted. Symptoms and fixes: [docs/troubleshooting.md](docs
 
 - `updateAll()`, `deleteAll()`, `updateCounters()` fire no events (conformance A13): call
   `$indexNow->submitRecords(Post::query()->where(...)->all())` or `./yii indexnow:submit-record` afterwards.
+- `upsert()` does fire an event (`AfterUpsert`), but the data layer does not say whether the row was inserted or
+  updated, so it is announced as an update: a rule limited to `events: [Created]` does not fire on an upsert.
 - `link()` / `unlink()` write the junction row with a plain command, no event on the owner: save the owner with a
   bumped timestamp afterwards (`$post->updated_at = time(); $post->save();`), or call `submitRecord($post)`.
 - A record without `EventsTrait` dispatches no events at all: the attribute alone hooks nothing.
@@ -291,17 +298,20 @@ use IndexNowKit\Attribute\{IndexNow, IndexNowDefaults};
 use IndexNowKit\Yii3\ActiveRecord\IndexNowEvents;
 use Yiisoft\ActiveRecord\ActiveRecord;
 use Yiisoft\ActiveRecord\Trait\EventsTrait;
+use Yiisoft\ActiveRecord\Trait\MagicRelationsTrait;
 
 #[IndexNowDefaults(when: 'published', fields: ['slug', 'title', 'published'])]
 #[IndexNow(route: 'post/view', params: ['slug' => 'slug'])]
+#[IndexNow(via: 'category')]      // needs MagicRelationsTrait, like any dotted path through a relation
 #[IndexNow(urls: ['/'])]
 #[IndexNowEvents]
-final class Post extends ActiveRecord { use EventsTrait; public ?int $id = null; public string $slug = ''; public string $title = ''; public bool $published = true; public function tableName(): string { return 'posts'; } }
+final class Post extends ActiveRecord { use EventsTrait; use MagicRelationsTrait; public ?int $id = null; public string $slug = ''; public string $title = ''; public bool $published = true; public ?int $category_id = null; public function tableName(): string { return 'posts'; } public function getCategoryQuery(): \Yiisoft\ActiveRecord\ActiveQueryInterface { return $this->hasOne(Category::class, ['id' => 'category_id']); } }
 ```
 
 - Verify: `./yii indexnow:check` (exit 1 on any error; `--strict` fails on warnings too, `--json` for machines), `./yii indexnow:config --json` (paste it into a bug report), `./yii indexnow:explain 'App\\Model\\Post' 1` (why a URL was or was not produced), `./yii indexnow:submit-record 'App\\Model\\Post' 1 --dry-run`.
 - Pitfalls:
-  - The record needs **both** `#[IndexNowEvents]` and `use EventsTrait;`: yiisoft/active-record dispatches events only through the trait, and the attribute only provides the handlers.
+  - The record needs **both** `#[IndexNowEvents]` and `use EventsTrait;`: yiisoft/active-record dispatches events only through the trait, and the attribute only provides the handlers. `via:` and dotted paths through a relation additionally need `use MagicRelationsTrait;`.
+  - `upsert()` raises `AfterUpsert`, not `AfterInsert`/`AfterUpdate`: it is announced as an update, so a rule limited to `events: [Created]` does not fire on it. `updateAll()`, `deleteAll()` and `updateCounters()` fire no events at all.
   - `dispatch` is `sync` or `none` in Yii3 (no queue until `yiisoft/queue` is stable; replace `DispatcherInterface` in `di/` for one); `dispatch: auto` exists in Symfony (`auto` | `messenger` | `sync` | `none`) and Yii2 (`auto` | `queue` | `sync` | `none`), **not** in Laravel (`queue` | `sync` | `none`).
   - Locales: `router.locales` in Laravel, Yii2 and Yii3 (`router.locale_parameter` names the route argument, `_language` in Yii3), `framework.enabled_locales` in Symfony; `locales: 'all'` on a rule uses that list.
   - `route:` is the **name** of a route (`->name('post/view')`), not its pattern; `route: 'post/view'` needs `Route::get('/posts/{slug}')->name('post/view')` in the routes configuration.

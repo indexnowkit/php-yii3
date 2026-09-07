@@ -11,6 +11,7 @@ use IndexNowKit\Check\DebounceStoreCheck;
 use IndexNowKit\Config;
 use IndexNowKit\Dispatch\DispatcherInterface;
 use IndexNowKit\Dispatch\NullDispatcher;
+use IndexNowKit\Exception\ConfigurationException;
 use IndexNowKit\Testing\Conformance\CheckOutputAssertions;
 use IndexNowKit\Testing\RecordingDispatcher;
 use IndexNowKit\Yii3\Check\ActiveRecordCheck;
@@ -21,6 +22,8 @@ use IndexNowKit\Yii3\IndexNow;
 use IndexNowKit\Yii3\Tests\Support\Fixtures;
 use IndexNowKit\Yii3\Tests\Yii3TestCase;
 use PHPUnit\Framework\Attributes\TestDox;
+use stdClass;
+use Yiisoft\Cache\ArrayCache as YiiArrayCache;
 use Yiisoft\Router\RouteCollection;
 use Yiisoft\Router\RouteCollectionInterface;
 use Yiisoft\Router\RouteCollector;
@@ -53,6 +56,65 @@ final class ChecksTest extends Yii3TestCase
         $wrong = $check(['per_url' => 600, 'store' => IndexNow::class]);
         self::assertSame([CheckLevel::Error], $this->levels($wrong));
         self::assertStringContainsString('not a Psr\SimpleCache\CacheInterface', $this->messages($wrong)[0]);
+    }
+
+    #[TestDox('the debounce probe writes a key a strict PSR-16 cache accepts: yiisoft/cache reserves {}()/\\@: and would refuse a colon')]
+    public function testTheProbeWritesAKeyAStrictCacheAccepts(): void
+    {
+        $strict = new YiiArrayCache();
+        $container = Fixtures::container($this->transport, $this->logger, [], ['strict.cache' => $strict]);
+        $check = new DebounceStoreCheck(
+            Config::fromArray(['key' => Fixtures::KEY, 'debounce' => ['per_url' => 600, 'store' => 'strict.cache']]),
+            (new CacheProbe($container))(...),
+            IndexNow::DEFAULT_DEBOUNCE_STORE,
+        );
+
+        self::assertSame([CheckLevel::Ok], $this->levels($check), 'the real yiisoft/cache accepted the probe key');
+        self::assertStringNotContainsString(':', CacheProbe::KEY);
+        self::assertSame(1, $strict->get(CacheProbe::KEY));
+    }
+
+    #[TestDox('router: a web request on a host other than base_url is a warning naming both')]
+    public function testRouterCheckComparesTheRequestHostWithBaseUrl(): void
+    {
+        $routes = $this->container->get(RouteCollectionInterface::class);
+        \assert($routes instanceof RouteCollectionInterface);
+
+        $same = new RouterCheck(Fixtures::options(), $routes, Fixtures::BASE_URL, 'www.example.com');
+        self::assertSame([CheckLevel::Ok], $this->levels($same), 'the same host says nothing extra');
+
+        $console = new RouterCheck(Fixtures::options(), $routes, Fixtures::BASE_URL, null);
+        self::assertSame([CheckLevel::Ok], $this->levels($console), 'no request, no line');
+
+        $other = new RouterCheck(Fixtures::options(), $routes, Fixtures::BASE_URL, 'staging.example.com');
+        self::assertSame([CheckLevel::Warning, CheckLevel::Ok], $this->levels($other));
+        self::assertStringContainsString('this request runs on "staging.example.com" while base_url names "www.example.com"', $this->messages($other)[0]);
+        self::assertSame(RouterCheck::CODE_BASE_URL, $this->codes($other)[0]);
+    }
+
+    #[TestDox('the checks option appends a container id of a CheckInterface; anything else is a configuration error')]
+    public function testTheChecksOption(): void
+    {
+        $own = new class implements CheckInterface {
+            public function check(CheckReport $report): void
+            {
+                $report->warning('cdn: the purge hook is not configured', 'app.cdn');
+            }
+        };
+        $container = Fixtures::container($this->transport, $this->logger, ['checks' => ['app.cdn_check']], ['app.cdn_check' => $own]);
+        $indexNow = $container->get(IndexNow::class);
+        \assert($indexNow instanceof IndexNow);
+
+        $items = $indexNow->checker()->run()->items();
+        $codes = array_map(static fn($item): ?string => $item->code, $items);
+        self::assertContains('app.cdn', $codes, 'the application\'s own line is part of the report');
+
+        $broken = Fixtures::container($this->transport, $this->logger, ['checks' => ['app.not_a_check']], ['app.not_a_check' => new stdClass()]);
+        $service = $broken->get(IndexNow::class);
+        \assert($service instanceof IndexNow);
+        $this->expectException(ConfigurationException::class);
+        $this->expectExceptionMessage('"checks" must list container ids of ' . CheckInterface::class . ' implementations, got app.not_a_check');
+        $service->checker()->run();
     }
 
     #[TestDox('every line of the whole check, adapter checks included, carries a code (the API of check --json)')]
@@ -112,5 +174,16 @@ final class ChecksTest extends Yii3TestCase
         $check->check($report);
 
         return array_map(static fn($item): string => $item->message, $report->items());
+    }
+
+    /**
+     * @return list<string|null>
+     */
+    private function codes(CheckInterface $check): array
+    {
+        $report = new CheckReport();
+        $check->check($report);
+
+        return array_map(static fn($item): ?string => $item->code, $report->items());
     }
 }

@@ -8,6 +8,7 @@ use IndexNowKit\Attribute\AttributeReaderInterface;
 use IndexNowKit\Attribute\ParamExtractor;
 use IndexNowKit\Attribute\RuleRegistry;
 use IndexNowKit\Check\CheckerInterface;
+use IndexNowKit\Check\SampleOptions;
 use IndexNowKit\ClientInterface;
 use IndexNowKit\Collector\CollectorInterface;
 use IndexNowKit\Config;
@@ -34,18 +35,21 @@ use IndexNowKit\Url\UrlNormalizerInterface;
 use IndexNowKit\Url\UrlResolverInterface;
 use IndexNowKit\Yii3\ActiveRecord\ActiveRecordLoader;
 use IndexNowKit\Yii3\ActiveRecord\IndexNowObserver;
-use IndexNowKit\Yii3\Check\SampleOptions;
 use IndexNowKit\Yii3\IndexNow;
 use IndexNowKit\Yii3\Wiring;
 use Psr\Clock\ClockInterface;
 
-/** @var array $params */
+/** @var array<string, mixed> $params */
 
 /*
- * Every piece of the core is one definition, so an application replaces any of them in its own `di/` (the same
+ * Every node of the core graph is one definition, so an application replaces any of them in its own `di/` (the same
  * key wins): `TransportInterface::class => MyTransport::class`. The default of each is the core graph's factory
  * over the other definitions (`Wiring::<node>()`, see docs/extending.md), so a replaced transport is what the
- * client, the checker and the console submitters use. `Services` is the graph every piece is read through.
+ * client, the checker and the console submitters use. `Services` is the graph every piece is read through, and
+ * `Wiring::NODES` maps node to definition id (`WiringTest` keeps that map complete against `Adapter\Services`).
+ *
+ * The one node with no definition of its own is `failureCache`: it is not a piece the application replaces but the
+ * PSR-16 cache behind `debounce.store`, which the package derives from that option — replace the cache instead.
  */
 return [
     IndexNow::class => [

@@ -55,7 +55,9 @@ ActiveRecord. Настройте его в params:
 'indexnowkit/yii3' => [
     'key' => $_ENV['INDEXNOW_KEY'] ?? null,     // или не указывайте: пакет сам читает INDEXNOW_KEY
     'base_url' => 'https://www.example.com',    // для консольных команд (нет запроса, откуда взять host)
-    'dry_run' => $_ENV['YII_ENV'] !== 'prod',   // dev/staging: логировать, не отправлять (без этого вне production check падает)
+    // dev/staging: логировать, не отправлять. Сравнивайте с тем же списком, что в `production_environments`,
+    // иначе `YII_ENV=production` включит dry-run в проде (без явного значения вне production `check` падает).
+    'dry_run' => !in_array($_ENV['YII_ENV'] ?? null, ['prod', 'production'], true),
 ],
 ```
 
@@ -131,8 +133,11 @@ final class Post extends ActiveRecord
 | `events`, `locales`, `host`, `name` | подмножество событий; `current`/`all`/список (`router.locales`); другой host; стабильный id правила |
 
 Аксессоры читают свойства ActiveRecord и отношения (`category.slug`, отношение `get<Name>Query()`) и падают на методы.
-Колонка `when` только с умолчанием **в базе** равна null у свежей записи до `loadDefaultValues()`: задайте типизированному
-свойству умолчание (`public bool $published = true;`), как выше.
+**`via:` и любой путь через точку по отношению требуют `MagicRelationsTrait`** рядом с `EventsTrait`, как в модели выше:
+yiisoft/active-record читает отношение `get<Name>Query()` по имени только через этот трейт, а без него правило падает с
+ошибкой ядра вместо того, чтобы отдать связанные страницы. Колонка `when` только с умолчанием **в базе** равна null у
+свежей записи до `loadDefaultValues()`: задайте типизированному свойству умолчание (`public bool $published = true;`),
+как выше.
 
 Классы, которые нельзя аннотировать: `'active_record' => ['models' => [Product::class]]` в params (классу всё равно нужен
 `EventsTrait`) или `$indexNow->observe(Product::class, [new IndexNow(...)])` в рантайме.
@@ -245,14 +250,14 @@ definition `SubmissionStoreInterface` в `di/` имеет приоритет н�
 - [Правила мониторинга и фильтр Sentry](https://github.com/indexnowkit/php/blob/main/packages/core/docs/operations.md#monitoring-rules),
   [удалённые страницы](https://github.com/indexnowkit/php/blob/main/packages/core/docs/operations.md#deleted-pages-what-your-site-must-return),
   [что не отправлять](https://github.com/indexnowkit/php/blob/main/packages/core/docs/operations.md#what-not-to-submit).
-- [Мультидомен: хосты, www и apex, локали](docs/multi-domain.md) · [commit-safety](docs/commit-safety.md) · [troubleshooting](docs/troubleshooting.md).
+- [Мультидомен: хосты, www и apex, локали](docs/multi-domain.md) · [commit-safety](docs/commit-safety.md) · [troubleshooting](docs/troubleshooting.ru.md).
 
 ## Отладка
 
 `./yii indexnow:check` валидирует params, запрашивает файл ключа и сообщает, как подключены отправки (dispatch, кэш,
 маршрут, хук ActiveRecord, спул sitemap); `./yii indexnow:explain 'App\Model\Post' 1` показывает правила, условия и
 URL одной записи, ничего не отправляя; категория лога `indexnow` на уровне `debug` объясняет, почему URL ушёл или
-не ушёл. Симптомы и решения: [docs/troubleshooting.md](docs/troubleshooting.md).
+не ушёл. Симптомы и решения: [docs/troubleshooting.ru.md](docs/troubleshooting.ru.md).
 
 ## Ограничения
 
@@ -283,17 +288,20 @@ use IndexNowKit\Attribute\{IndexNow, IndexNowDefaults};
 use IndexNowKit\Yii3\ActiveRecord\IndexNowEvents;
 use Yiisoft\ActiveRecord\ActiveRecord;
 use Yiisoft\ActiveRecord\Trait\EventsTrait;
+use Yiisoft\ActiveRecord\Trait\MagicRelationsTrait;
 
 #[IndexNowDefaults(when: 'published', fields: ['slug', 'title', 'published'])]
 #[IndexNow(route: 'post/view', params: ['slug' => 'slug'])]
+#[IndexNow(via: 'category')]      // требует MagicRelationsTrait, как и любой путь через точку по отношению
 #[IndexNow(urls: ['/'])]
 #[IndexNowEvents]
-final class Post extends ActiveRecord { use EventsTrait; public ?int $id = null; public string $slug = ''; public string $title = ''; public bool $published = true; public function tableName(): string { return 'posts'; } }
+final class Post extends ActiveRecord { use EventsTrait; use MagicRelationsTrait; public ?int $id = null; public string $slug = ''; public string $title = ''; public bool $published = true; public ?int $category_id = null; public function tableName(): string { return 'posts'; } public function getCategoryQuery(): \Yiisoft\ActiveRecord\ActiveQueryInterface { return $this->hasOne(Category::class, ['id' => 'category_id']); } }
 ```
 
 - Проверка: `./yii indexnow:check` (exit 1 при любой ошибке; `--strict` падает и на предупреждениях, `--json` для машин), `./yii indexnow:config --json` (вставьте в баг-репорт), `./yii indexnow:explain 'App\\Model\\Post' 1` (почему URL получился или нет), `./yii indexnow:submit-record 'App\\Model\\Post' 1 --dry-run`.
 - Подводные камни:
-  - Записи нужны **оба**: `#[IndexNowEvents]` и `use EventsTrait;` — yiisoft/active-record диспетчит события только через трейт, атрибут лишь даёт обработчики.
+  - Записи нужны **оба**: `#[IndexNowEvents]` и `use EventsTrait;` — yiisoft/active-record диспетчит события только через трейт, атрибут лишь даёт обработчики. Для `via:` и путей через точку по отношению нужен ещё `use MagicRelationsTrait;`.
+  - `upsert()` поднимает `AfterUpsert`, а не `AfterInsert`/`AfterUpdate`: он объявляется как обновление, поэтому правило с `events: [Created]` на нём не срабатывает. `updateAll()`, `deleteAll()` и `updateCounters()` не порождают событий вовсе.
   - `dispatch` в Yii3 — `sync` или `none` (очереди нет, пока `yiisoft/queue` не стабилен; замените `DispatcherInterface` в `di/`); `dispatch: auto` есть в Symfony (`auto` | `messenger` | `sync` | `none`) и Yii2 (`auto` | `queue` | `sync` | `none`), **не** в Laravel (`queue` | `sync` | `none`).
   - Локали: `router.locales` в Laravel, Yii2 и Yii3 (`router.locale_parameter` — имя аргумента маршрута, в Yii3 `_language`), `framework.enabled_locales` в Symfony; `locales: 'all'` у правила берёт этот список.
   - `route:` — **имя** маршрута (`->name('post/view')`), не его шаблон; `route: 'post/view'` требует `Route::get('/posts/{slug}')->name('post/view')` в конфигурации маршрутов.

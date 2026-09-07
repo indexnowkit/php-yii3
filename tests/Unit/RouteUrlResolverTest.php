@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace IndexNowKit\Yii3\Tests\Unit;
 
+use Composer\InstalledVersions;
 use IndexNowKit\Config;
 use IndexNowKit\Exception\ConfigurationException;
 use IndexNowKit\Url\RouteUrlResolverInterface;
@@ -25,7 +26,15 @@ final class RouteUrlResolverTest extends Yii3TestCase
         self::assertSame('https://www.example.com/posts/hello', $resolver->generate('post/view', ['slug' => 'hello']));
         self::assertSame('https://example.de/posts/hello', $resolver->generate('post/view', ['slug' => 'hello'], null, 'example.de'));
         self::assertSame('https://www.example.com/de/articles/hallo', $resolver->generate('article/view', ['slug' => 'hallo'], 'de'));
-        self::assertStringStartsWith('https://www.example.com/posts/hello', $resolver->generate('post/view', ['slug' => 'hello'], 'de'), 'a route without the locale argument: the generator moves it to the query (router-fastroute 4.0.1+) or drops it (4.0.0)');
+        // a route whose pattern does not declare the locale argument: the generator moves it to the query string
+        // (router-fastroute 4.0.1 and later) or drops it (4.0.0). Both are exact URLs, so a lost locale is caught.
+        $withoutTheArgument = $resolver->generate('post/view', ['slug' => 'hello'], 'de');
+        $version = InstalledVersions::getVersion('yiisoft/router-fastroute') ?? '0.0.0';
+        self::assertSame(
+            version_compare($version, '4.0.1', '>=') ? 'https://www.example.com/posts/hello?_language=de' : 'https://www.example.com/posts/hello',
+            $withoutTheArgument,
+            'yiisoft/router-fastroute ' . $version,
+        );
 
         $item = new Item();
         $item->name = 'x';

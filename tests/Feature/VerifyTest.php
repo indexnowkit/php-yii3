@@ -33,16 +33,22 @@ final class VerifyTest extends Yii3TestCase
 
         return [
             EventDispatcherInterface::class => new class ($seen) implements EventDispatcherInterface {
-                /** @param list<string> $seen */
+                /** @param list<string> $seen the test's own property, by reference: what the dispatcher saw */
                 public function __construct(private array &$seen) {}
 
                 public function dispatch(object $event): object
                 {
                     if ($event instanceof Result) {
-                        $this->seen[] = $event->status->value . ':' . ($event->reason?->value ?? '-');
+                        $this->seen[] = $event->status->value . ':' . ($event->reason->value ?? '-');
                     }
 
                     return $event;
+                }
+
+                /** @return list<string> */
+                public function seen(): array
+                {
+                    return $this->seen;
                 }
             },
         ];

@@ -14,11 +14,23 @@ The core's tiers ("call", "implement", "may grow") apply to every core class you
 | **`IndexNow`** methods `config()`, `services()`, `kit()`, `rules()`, `keys()`, `staging()`, `observer()`, `submit()`, `submitRecord()`, `submitRecords()`, `urlsFor()`, `urlsForAll()`, `explain()`, `collect()`, `flush()`, `flushIfCollected()`, `observe()`, the `*Package()` / `*Installed()` / `*Config()` accessors | Names and types stay; new methods are only added. |
 | **Console commands and options** (`indexnow:check`, `indexnow:config`, `indexnow:submit`, `indexnow:submit-record`, `indexnow:explain`, `indexnow:key:generate`, `indexnow:sitemap`, `indexnow:history`, `indexnow:status`) | Names, arguments and options come from the `Definitions` of `indexnowkit/console` and the optional packages; new options are only added. Output is not a contract except the exit codes and the `--json` shapes. |
 | **The config groups** the package ships (`params`, `params-console`, `di`, `di-web`, `di-console`, `events-web`, `events-console`, `routes`, `bootstrap`), the route name `indexnow/key-file` and the default pattern | Stay. |
-| **`ActiveRecord\IndexNowEvents`**, **`ActiveRecord\ObserverProvider`** (`set()`, `get()`, `isSet()`, `reset()`), **`ActiveRecord\IndexNowObserver`** public hooks | The attribute stays a drop-in; the observer's public hooks keep their names. |
-| **Check codes** `dispatch.mode`, `router.key_file`, `router.route`, `active_record.enabled` and the `checks` option | Stay ([core check-codes.md](https://github.com/indexnowkit/php/blob/main/packages/core/docs/check-codes.md)). |
+| **`ActiveRecord\IndexNowEvents`**, **`ActiveRecord\ObserverProvider`** (`set()`, `get()`, `isSet()`), **`ActiveRecord\IndexNowObserver`** public hooks | The attribute stays a drop-in; the observer's public hooks keep their names. |
+| **Check codes** `dispatch.mode`, `debounce.store`, `router.key_file`, `router.route`, `router.base_url`, `active_record.enabled`, `key_file.status` and the `checks` option | Stay ([core check-codes.md](https://github.com/indexnowkit/php/blob/main/packages/core/docs/check-codes.md)). |
+
+`ObserverProvider::reset()` is **test support**, marked `@internal`: it undoes the package's bootstrap in a process
+that builds a second container. An application never calls it, and it may change or disappear in a minor version.
+
+The codes of the optional packages follow those packages, not this one: `verify.installed`, `history.store`,
+`history.records`, `sitemap.spool` and the rest come from `indexnowkit/verify`, `indexnowkit/history` and
+`indexnowkit/sitemap` (and, without the package, from the core's `Adapter\OptionalPackage`, whose code is
+`<feature>.installed`). This package prints them; it does not own them.
 
 Not a contract: log message texts (their `context` keys are), the exact wording the commands print (exit codes and
 levels are), the `Wiring` helper's private graph construction, `Env`.
+
+`Wiring::NODES` maps every node of the core's `Adapter\Services` to the container id it is read from, and the
+package's own test keeps that map complete: the one node with no definition of its own is `failureCache`, which is
+derived from `debounce.store` rather than replaced on its own.
 
 ## Pinning
 

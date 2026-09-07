@@ -86,10 +86,15 @@ still needs `EventsTrait`.
 
 ## Manual submissions
 
-`IndexNow::submit(iterable $urls)`, `submitRecord($record, Event $event)`, `submitRecords(iterable $records)` (one
-request for many), `urlsFor()`, `urlsForAll()`, `explain()` return `Result`s; `collect()` parks URLs in the request
-collector, `flush()` verifies the staged changes and sends now. Every `Result` is also dispatched to the container's
-PSR-14 `EventDispatcherInterface`: listen to `IndexNowKit\Result` in your `events.php`.
+| Method | Returns |
+|---|---|
+| `IndexNow::submit(iterable $urls)`, `submitRecord($record, Event $event)`, `submitRecords(iterable $records)` (one request for many) | `list<Result>` — what the engines answered |
+| `urlsFor($record, Event $event)`, `urlsForAll(iterable $records, Event $event)` | `list<string>` — the URLs the rules yield, nothing sent |
+| `explain($record, Event $event)` | `list<ResolvedUrl>` — the same URLs with the rule that produced each |
+| `collect(iterable $urls)`, `flush()` | nothing: `collect()` parks URLs in the request collector, `flush()` verifies the staged changes and sends now |
+
+Every `Result` is also dispatched to the container's PSR-14 `EventDispatcherInterface`: listen to
+`IndexNowKit\Result` in your `events.php`.
 
 ## Checks
 

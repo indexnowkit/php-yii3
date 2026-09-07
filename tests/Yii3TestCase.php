@@ -113,6 +113,15 @@ abstract class Yii3TestCase extends TestCase
     }
 
     /**
+     * The command `./yii <name>` resolves: built by the container through the map of `config/params-console.php`,
+     * so the optional-package branches of that file are what decides between the real command and its stub.
+     */
+    protected function commandNamed(string $name): Command
+    {
+        return Fixtures::consoleApplication($this->container)->find($name);
+    }
+
+    /**
      * Runs a command the way `./yii` does.
      *
      * @param class-string<Command> $class
@@ -123,6 +132,21 @@ abstract class Yii3TestCase extends TestCase
     protected function yii(string $class, array $input = []): array
     {
         $tester = $this->command($class);
+        $code = $tester->execute($input);
+
+        return [$code, $tester->getDisplay()];
+    }
+
+    /**
+     * Runs the command `./yii <name>` resolves, the way `./yii` does.
+     *
+     * @param array<string, mixed> $input
+     *
+     * @return array{0: int, 1: string} exit code and output
+     */
+    protected function yiiNamed(string $name, array $input = []): array
+    {
+        $tester = new CommandTester($this->commandNamed($name));
         $code = $tester->execute($input);
 
         return [$code, $tester->getDisplay()];

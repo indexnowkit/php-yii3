@@ -51,7 +51,8 @@ The package reads four variables itself (`$_ENV`, `$_SERVER`, `getenv()`): `INDE
 | `logging.category` | `indexnow` | the `category` context of every log line (what yiisoft/log targets filter on) |
 | `checks` | `[]` | container ids of `Check\CheckInterface` implementations to append to `indexnow:check` |
 | `sitemap.*` | — | the block of `indexnowkit/sitemap` (its [configuration](https://github.com/indexnowkit/php/blob/main/packages/sitemap/README.md)); ignored without the package |
-| `verify.*` | — | the block of `indexnowkit/verify`; `history.pdo.service` names a `ConnectionInterface` id for `history.*` of `indexnowkit/history` |
+| `verify.*` | — | the block of `indexnowkit/verify` (the pre-flight GET before every submission); ignored without the package |
+| `history.*` | — | the block of `indexnowkit/history`; `history.pdo.service` names a `ConnectionInterface` id of the container, `history.pdo.dsn` a database of its own; ignored without the package |
 
 ## What is not an option
 

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use IndexNowKit\Adapter\OptionalPackage;
 use IndexNowKit\Yii3\Console\CheckCommand;
 use IndexNowKit\Yii3\Console\ConfigCommand;
 use IndexNowKit\Yii3\Console\ExplainCommand;
@@ -18,11 +19,12 @@ use IndexNowKit\Yii3\Console\SubmitRecordCommand;
 /*
  * The `./yii indexnow:*` commands (yiisoft/yii-console reads `commands`). The commands of the optional packages are
  * registered only when the package is installed; without it a stub with the same name prints the install line and
- * exits 1, so a cron that names the command keeps a readable answer. A `::class` on an absent class is a string, so
- * the two markers below are safe to name without the packages.
+ * exits 1, so a cron that names the command keeps a readable answer. The predicate is the core's `OptionalPackage`,
+ * the same one the service and `check` use — it names the marker class as a string and therefore loads nothing of
+ * the package it asks about.
  */
-$sitemap = class_exists(\IndexNowKit\Sitemap\SitemapReader::class);
-$history = class_exists(\IndexNowKit\History\HistoryConfig::class);
+$sitemap = OptionalPackage::sitemap()->installed();
+$history = OptionalPackage::history()->installed();
 
 return [
     'yiisoft/yii-console' => [

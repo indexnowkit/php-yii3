@@ -18,13 +18,14 @@ final class Env
 
     public static function get(string $name): ?string
     {
-        foreach ([$_ENV[$name] ?? null, $_SERVER[$name] ?? null, getenv($name)] as $value) {
+        foreach ([$_ENV[$name] ?? null, $_SERVER[$name] ?? null] as $value) {
             if (\is_string($value) && $value !== '') {
                 return $value;
             }
         }
+        $value = getenv($name); // only when the superglobals said nothing: getenv() is a system call
 
-        return null;
+        return \is_string($value) && $value !== '' ? $value : null;
     }
 
     /** The environment name for `production_environments` (`YII_ENV`, `APP_ENV`); null when none is set. */

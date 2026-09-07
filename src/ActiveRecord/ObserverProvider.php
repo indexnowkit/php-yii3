@@ -39,9 +39,16 @@ final class ObserverProvider
         return self::$observer !== null;
     }
 
-    /** Tests: the next process-wide state. */
+    /**
+     * The next process-wide state, for tests only: the observer gives every class it wrapped its own dispatcher
+     * back ({@see IndexNowObserver::detach()}), so neither it nor the container behind it is held by the static
+     * provider of yiisoft/active-record. An application never calls this — a request does not undo its bootstrap.
+     *
+     * @internal test support (`Fixtures::destroy()` of the package's suite); not part of the BC promise
+     */
     public static function reset(): void
     {
+        self::$observer?->detach();
         self::$observer = null;
         self::$warned = false;
     }

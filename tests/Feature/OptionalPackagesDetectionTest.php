@@ -8,6 +8,12 @@ use IndexNowKit\Config;
 use IndexNowKit\Console\ExitCode;
 use IndexNowKit\Testing\Conformance\OptionalPackageAssertions;
 use IndexNowKit\Yii3\Console\CheckCommand;
+use IndexNowKit\Yii3\Console\HistoryCommand;
+use IndexNowKit\Yii3\Console\HistoryNotInstalledCommand;
+use IndexNowKit\Yii3\Console\SitemapCommand;
+use IndexNowKit\Yii3\Console\SitemapNotInstalledCommand;
+use IndexNowKit\Yii3\Console\StatusCommand;
+use IndexNowKit\Yii3\Console\StatusNotInstalledCommand;
 use IndexNowKit\Yii3\Tests\Fixtures\Post;
 use IndexNowKit\Yii3\Tests\Yii3TestCase;
 use PHPUnit\Framework\Attributes\TestDox;
@@ -32,7 +38,9 @@ final class OptionalPackagesDetectionTest extends Yii3TestCase
         self::assertInstanceOf(Config::class, $this->indexNow()->buildConfig());
         self::assertTrue($this->indexNow()->config()->enabled);
 
-        [$code, $display] = $this->yii(CheckCommand::class);
+        // by name, through the map of config/params-console.php: that map is what `./yii` reads
+        self::assertInstanceOf(CheckCommand::class, $this->commandNamed('indexnow:check'));
+        [$code, $display] = $this->yiiNamed('indexnow:check');
         OptionalPackageAssertions::assertDetected($display);
         self::assertContains($code, [ExitCode::SUCCESS, ExitCode::FAILURE], $display);
 
@@ -43,5 +51,15 @@ final class OptionalPackagesDetectionTest extends Yii3TestCase
         self::assertSame(['https://www.example.com/posts/detected'], $this->sentUrls());
         self::assertSame([], $this->logger->messages('critical'));
         self::assertSame([], $this->logger->messages('error'));
+    }
+
+    #[TestDox('the commands of the optional packages resolve to the stubs when the packages were removed, to the real ones otherwise')]
+    public function testTheCommandMapFollowsTheDetection(): void
+    {
+        $absent = OptionalPackageAssertions::expectAbsent();
+
+        self::assertInstanceOf($absent ? SitemapNotInstalledCommand::class : SitemapCommand::class, $this->commandNamed('indexnow:sitemap'));
+        self::assertInstanceOf($absent ? HistoryNotInstalledCommand::class : HistoryCommand::class, $this->commandNamed('indexnow:history'));
+        self::assertInstanceOf($absent ? StatusNotInstalledCommand::class : StatusCommand::class, $this->commandNamed('indexnow:status'));
     }
 }

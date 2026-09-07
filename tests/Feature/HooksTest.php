@@ -74,6 +74,32 @@ final class HooksTest extends Yii3TestCase
         self::assertSame([], $this->transport->posts);
     }
 
+    #[TestDox('upsert() raises AfterUpsert and is announced as an update: the page is submitted like any other change')]
+    public function testUpsert(): void
+    {
+        $post = new Post();
+        $post->slug = 'upserted';
+        $post->upsert();
+        $this->kit()->flush();
+
+        self::assertSame(['https://www.example.com/posts/upserted'], $this->sentUrls());
+        self::assertSame([], $this->logger->messages('error'));
+    }
+
+    #[TestDox('an upsert inside a transaction is verified against the row like every other change')]
+    public function testUpsertInsideATransaction(): void
+    {
+        $tx = $this->db()->beginTransaction();
+        $post = new Post();
+        $post->slug = 'upserted-in-tx';
+        $post->upsert();
+        self::assertSame([], $this->sentUrls(), 'nothing leaves before the transaction ends');
+        $tx->rollBack();
+        $this->indexNow()->flush();
+
+        self::assertSame([], $this->sentUrls(), 'the row is gone: the change is dropped');
+    }
+
     #[TestDox('the observer is the one the bootstrap installed; the events of the hooks reach it')]
     public function testBootstrapInstalledTheObserver(): void
     {

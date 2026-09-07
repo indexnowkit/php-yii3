@@ -16,8 +16,12 @@ use Psr\Container\ContainerInterface;
  */
 return [
     static function (ContainerInterface $container): void {
-        ObserverProvider::set($container->get(IndexNowObserver::class));
+        $observer = $container->get(IndexNowObserver::class);
+        assert($observer instanceof IndexNowObserver);
+        ObserverProvider::set($observer);
+
         $indexNow = $container->get(IndexNow::class);
+        assert($indexNow instanceof IndexNow);
         foreach ($indexNow->modelClasses() as $class) {
             $indexNow->observe($class);
         }

@@ -16,6 +16,13 @@ use Throwable;
  */
 final class CacheProbe
 {
+    /**
+     * The key the probe writes. PSR-16 reserves `{}()/\@:` and `yiisoft/cache` rejects a key containing any of them,
+     * so it carries no colon: a probe that only a strict implementation refuses would report a working store as
+     * broken, and `check` is the one command that must not lie about it.
+     */
+    public const KEY = 'indexnowkit_check';
+
     public function __construct(private readonly ContainerInterface $container) {}
 
     public function __invoke(string $store): string
@@ -31,7 +38,7 @@ final class CacheProbe
         if (!$cache instanceof CacheInterface) {
             throw new RuntimeException(\sprintf('container definition "%s" is a %s, not a Psr\SimpleCache\CacheInterface', $store, get_debug_type($cache)));
         }
-        $cache->set('indexnowkit:check', 1, 5);
+        $cache->set(self::KEY, 1, 5);
 
         return \sprintf('cache "%s" (%s)', $store, (new ReflectionClass($cache))->getShortName());
     }

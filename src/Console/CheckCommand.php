@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace IndexNowKit\Yii3\Console;
 
+use IndexNowKit\Check\SampleOptions;
 use IndexNowKit\Console\CheckRunner;
 use IndexNowKit\Console\Definitions;
 use IndexNowKit\Console\SubjectLoaderInterface;
 use IndexNowKit\Yii3\Check\RecordSampler;
-use IndexNowKit\Yii3\Check\SampleOptions;
 use IndexNowKit\Yii3\IndexNow;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;

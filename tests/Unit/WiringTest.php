@@ -33,6 +33,7 @@ use IndexNowKit\Yii3\Tests\Yii3TestCase;
 use IndexNowKit\Yii3\Wiring;
 use PHPUnit\Framework\Attributes\TestDox;
 use Psr\SimpleCache\CacheInterface;
+use ReflectionClass;
 use Symfony\Component\Console\Tester\CommandTester;
 
 /**
@@ -66,7 +67,8 @@ final class WiringTest extends Yii3TestCase
                 Services::CHANGES => $services->changes(),
                 Services::URL_RESOLVER => $services->urlResolver(),
                 Services::PARAM_EXTRACTOR => $services->paramExtractor(),
-                default => self::fail('unknown node ' . $node),
+                // no default arm: the keys of Wiring::NODES are exactly the node constants, and
+                // testEveryNodeOfTheCoreHasAContainerDefinition() is what keeps that true
             };
             self::assertSame($fromContainer, $fromGraph, $id);
         }
@@ -78,6 +80,30 @@ final class WiringTest extends Yii3TestCase
         $extractor = $this->container->get(ParamExtractor::class);
         self::assertInstanceOf(ParamExtractor::class, $extractor);
         self::assertInstanceOf(ActiveRecordSubjectReader::class, $extractor->readers()[0] ?? null);
+    }
+
+    #[TestDox('Wiring::NODES covers every node of Adapter\Services except the ones this adapter deliberately does not expose as a definition')]
+    public function testEveryNodeOfTheCoreHasAContainerDefinition(): void
+    {
+        // failureCache is not a definition: it is the PSR-16 cache behind `debounce.store`, derived from that option
+        $notDefinitions = [Services::FAILURE_CACHE];
+
+        $nodes = [];
+        foreach ((new ReflectionClass(Services::class))->getReflectionConstants() as $constant) {
+            $value = $constant->getValue();
+            if ($constant->isPublic() && \is_string($value)) {
+                $nodes[] = $value;
+            }
+        }
+        $covered = [...array_keys(Wiring::NODES), ...$notDefinitions];
+        sort($nodes);
+        sort($covered);
+
+        self::assertSame($nodes, $covered, 'a node the core added is neither in Wiring::NODES nor in the list of nodes this adapter does not expose');
+        foreach (Wiring::NODES as $node => $id) {
+            self::assertNotContains($node, $notDefinitions, $node . ' is listed both ways');
+            self::assertTrue($this->container->has($id), $id . ' has no container definition');
+        }
     }
 
     #[TestDox('a replaced DispatcherInterface definition is what the facade dispatches to, and check names it')]

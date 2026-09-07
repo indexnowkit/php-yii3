@@ -11,6 +11,8 @@ use IndexNowKit\Attribute\AttributeReaderInterface;
 use IndexNowKit\Attribute\ParamExtractor;
 use IndexNowKit\Check\CheckInterface;
 use IndexNowKit\Check\DebounceStoreCheck;
+use IndexNowKit\Check\SampleGateCheck;
+use IndexNowKit\Check\SampleOptions;
 use IndexNowKit\ClientInterface;
 use IndexNowKit\Collector\CollectorInterface;
 use IndexNowKit\Debounce\DebounceStoreFactory;
@@ -18,7 +20,6 @@ use IndexNowKit\Debounce\DebounceStoreInterface;
 use IndexNowKit\Dispatch\DispatcherInterface;
 use IndexNowKit\Exception\ConfigurationException;
 use IndexNowKit\History\Adapter\HistoryServices;
-use IndexNowKit\History\HistoryConfig;
 use IndexNowKit\Http\TransportInterface;
 use IndexNowKit\Key\KeyProviderInterface;
 use IndexNowKit\Sitemap\Adapter\SitemapServices;
@@ -35,19 +36,18 @@ use IndexNowKit\Url\UrlNormalizerInterface;
 use IndexNowKit\Url\UrlResolverInterface;
 use IndexNowKit\Verify\Adapter\VerifyServices;
 use IndexNowKit\Yii3\ActiveRecord\ActiveRecordSubjectReader;
+use IndexNowKit\Yii3\ActiveRecord\IndexNowObserver;
 use IndexNowKit\Yii3\ActiveRecord\ObserverProvider;
 use IndexNowKit\Yii3\Check\ActiveRecordCheck;
 use IndexNowKit\Yii3\Check\CacheProbe;
 use IndexNowKit\Yii3\Check\DispatchCheck;
 use IndexNowKit\Yii3\Check\RouterCheck;
-use IndexNowKit\Yii3\Check\SampleOptions;
-use IndexNowKit\Yii3\Check\VerifySampleCheck;
 use IndexNowKit\Yii3\Url\YiiRouteUrlResolver;
+use PDO;
 use Psr\Clock\ClockInterface;
 use Psr\Container\ContainerInterface;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Psr\SimpleCache\CacheInterface as Psr16;
-use Throwable;
 use Yiisoft\Db\Connection\ConnectionInterface;
 use Yiisoft\Db\Driver\Pdo\PdoConnectionInterface;
 use Yiisoft\Router\CurrentRoute;
@@ -166,13 +166,13 @@ final class Wiring
     /** The bridge over `UrlGeneratorInterface` with the `router` block (locales, the locale argument). */
     public function router(): RouteUrlResolverInterface
     {
-        return $this->graph(Services::ROUTER)->router() ?? throw new ConfigurationException('The router bridge could not be built.');
+        return $this->graph(Services::ROUTER)->requireRouter();
     }
 
     /** `#[IndexNow(resolver: ...)]` ids: a container id or a class the container can build. */
     public function resolverLocator(): ResolverLocatorInterface
     {
-        return $this->graph(Services::RESOLVER_LOCATOR)->resolverLocator() ?? throw new ConfigurationException('The resolver locator could not be built.');
+        return $this->graph(Services::RESOLVER_LOCATOR)->requireResolverLocator();
     }
 
     public function clock(): ClockInterface
@@ -210,12 +210,12 @@ final class Wiring
         $checks = [
             new DispatchCheck($services->config->dispatch, static fn(): DispatcherInterface => $services->dispatcher()),
             new DebounceStoreCheck($services->config, (new CacheProbe($this->container))(...), IndexNow::DEFAULT_DEBOUNCE_STORE),
-            new RouterCheck($indexNow->options(), $routes instanceof RouteCollectionInterface ? $routes : null),
-            new ActiveRecordCheck($indexNow->activeRecordEnabled(), ObserverProvider::isSet(), $indexNow->modelClasses()),
+            new RouterCheck($indexNow->options(), $routes instanceof RouteCollectionInterface ? $routes : null, $services->config->baseUrl, $this->requestHost()),
+            new ActiveRecordCheck($indexNow->activeRecordEnabled(), ObserverProvider::isSet(), $indexNow->modelClasses(), array_values(array_filter($indexNow->modelClasses(), IndexNowObserver::carriesEventsAttribute(...)))),
             $indexNow->sitemapInstalled() ? SitemapServices::spoolCheck($indexNow->sitemapConfig()) : $indexNow->sitemapPackage()->check($indexNow->block('sitemap')),
             ...$indexNow->verifyInstalled()
-                ? VerifyServices::checksFor($indexNow->verifyConfig(), $services, 'a replaced DispatcherInterface', new VerifySampleCheck($this->samples(), VerifyServices::sampleCheck($indexNow->verifyTransport(), $indexNow->verifyConfig(), $services->normalizer(), $services->keys(), $this->recordSampler(), $indexNow->robots())))
-                : [new VerifySampleCheck($this->samples(), null, $indexNow->verifyPackage()->checkLine($indexNow->block('verify')), $indexNow->verifyPackage()->checkLevel($indexNow->block('verify')))],
+                ? VerifyServices::checksFor($indexNow->verifyConfig(), $services, 'a replaced DispatcherInterface', SampleGateCheck::withPackage($this->samples(), VerifyServices::sampleCheck($indexNow->verifyTransport(), $indexNow->verifyConfig(), $services->normalizer(), $services->keys(), $this->recordSampler(), $indexNow->robots())))
+                : [SampleGateCheck::withoutPackage($this->samples(), $indexNow->verifyPackage(), $indexNow->block('verify'))],
             ...$indexNow->historyInstalled()
                 ? HistoryServices::checksFor($indexNow->historyConfig(), $services)
                 : [$indexNow->historyPackage()->check($indexNow->block('history'))],
@@ -239,6 +239,15 @@ final class Wiring
         \assert($samples instanceof SampleOptions);
 
         return $samples;
+    }
+
+    /** The host the current request was matched under, for the `base_url` line of `RouterCheck`; null in the console. */
+    private function requestHost(): ?string
+    {
+        $route = $this->container->has(CurrentRoute::class) ? $this->container->get(CurrentRoute::class) : null;
+        $host = $route instanceof CurrentRoute ? $route->getUri()?->getHost() : null;
+
+        return \is_string($host) && $host !== '' ? $host : null;
     }
 
     /**
@@ -284,10 +293,9 @@ final class Wiring
         }
         // the pieces of the framework the defaults are built from
         $builder->httpClientLocator(static fn(string $id): mixed => $container->get($id));
-        if ($container->has(EventDispatcherInterface::class)) {
-            // every Result goes to the application's PSR-14 dispatcher: listen to IndexNowKit\Result in events.php
-            $builder->events(static fn(): object => self::service($container, EventDispatcherInterface::class));
-        }
+        // every Result goes to the application's PSR-14 dispatcher: listen to IndexNowKit\Result in events.php.
+        // The container is asked when the node is first used, not while the graph is described: build() does no IO.
+        $builder->events(static fn(): ?object => $container->has(EventDispatcherInterface::class) ? self::service($container, EventDispatcherInterface::class) : null);
         $store = $config->debounceStore ?? IndexNow::DEFAULT_DEBOUNCE_STORE;
         if (!\in_array($store, [DebounceStoreFactory::MEMORY, DebounceStoreFactory::NONE], true)) {
             // The 403 counter (and the robots cache of verify) share the PSR-16 cache behind `debounce.store`; memory/none leave it in the process.
@@ -295,7 +303,13 @@ final class Wiring
         }
         match ($except) {
             Services::DEBOUNCE_STORE => $builder->debounceStore(static fn(Services $s): DebounceStoreInterface => DebounceStoreFactory::fromConfig($s->config, static fn(string $id): mixed => $container->get($id), IndexNow::DEFAULT_DEBOUNCE_STORE, $s->clock())),
-            Services::SUBMISSION_STORE => $indexNow->historyEnabled() ? $builder->submissionStore(static fn(Services $s): SubmissionStoreInterface => self::historyStore($indexNow->historyConfig(), $s, $container)) : null,
+            Services::SUBMISSION_STORE => $indexNow->historyEnabled() ? $builder->submissionStore(static fn(Services $s): SubmissionStoreInterface => HistoryServices::storeFor(
+                $indexNow->historyConfig(),
+                $s->config,
+                static fn(?string $id): PDO => self::pdoOf($container, $id ?? ConnectionInterface::class),
+                static fn(?string $id): Psr16 => self::cacheOf($container, $id ?? IndexNow::DEFAULT_DEBOUNCE_STORE),
+                IndexNow::DEFAULT_DEBOUNCE_STORE,
+            )) : null,
             Services::SUBMITTER => $indexNow->verifyEnabled() ? $builder->submitter(static fn(Services $s): SubmitterInterface => VerifyServices::submitterFor(
                 new Submitter($s->client(), $s->config, $s->debounceStore(), $s->logger, $s->normalizer(), $s->events(), $s->submissionStore(), $s->clock()),
                 $indexNow->verifyConfig(),
@@ -352,33 +366,29 @@ final class Wiring
     }
 
     /**
-     * The store of `history.store` (indexnowkit/history): `pdo` over the PDO of the `ConnectionInterface` the
-     * container holds under `history.pdo.service` (the default connection when unset) or a PDO built from
-     * `history.pdo.dsn`; `psr16` over the cache named by `debounce.store` (the container's `CacheInterface` with `memory`/`none`).
+     * The PDO behind the container's `ConnectionInterface` under $id, for the `pdo` store of indexnowkit/history:
+     * what `HistoryServices::storeFor()` asks the framework for. A connection that is not PDO-backed (or an id the
+     * container does not know) is the exception `storeFor()` wraps into its `history.pdo.service` text.
      */
-    private static function historyStore(HistoryConfig $history, Services $services, ContainerInterface $container): SubmissionStoreInterface
+    private static function pdoOf(ContainerInterface $container, string $id): PDO
     {
-        if ($history->store === HistoryConfig::STORE_PDO) {
-            if ($history->pdoDsn !== null) {
-                return HistoryServices::pdoStore(HistoryServices::pdoFromDsn($history->pdoDsn), $history);
-            }
-            $id = $history->pdoService ?? ConnectionInterface::class;
-            $connection = $container->get($id);
-            if (!$connection instanceof PdoConnectionInterface) {
-                throw new ConfigurationException(\sprintf('history.pdo.service "%s" must be a PDO-backed yiisoft/db connection (%s), got %s.', $id, PdoConnectionInterface::class, get_debug_type($connection)));
-            }
-            return HistoryServices::pdoStore($connection->getActivePdo(), $history);
-        }
-        if ($history->store !== HistoryConfig::STORE_PSR16) {
-            throw new ConfigurationException('history.store is set but no store was built.');
-        }
-        $id = HistoryServices::debounceCacheId($services->config) ?? IndexNow::DEFAULT_DEBOUNCE_STORE;
-        $cache = $container->get($id);
-        if (!$cache instanceof Psr16) {
-            throw new ConfigurationException(\sprintf('history.store "psr16" needs a PSR-16 cache under "%s", got %s.', $id, get_debug_type($cache)));
+        $connection = $container->get($id);
+        if (!$connection instanceof PdoConnectionInterface) {
+            throw new ConfigurationException(\sprintf('the container definition "%s" is a %s, not a PDO-backed yiisoft/db connection (%s)', $id, get_debug_type($connection), PdoConnectionInterface::class));
         }
 
-        return HistoryServices::psr16Store($cache, $history, $services->config);
+        return $connection->getActivePdo();
+    }
+
+    /** The PSR-16 cache under $id, for the `psr16` store of indexnowkit/history (the id `debounce.store` names). */
+    private static function cacheOf(ContainerInterface $container, string $id): Psr16
+    {
+        $cache = $container->get($id);
+        if (!$cache instanceof Psr16) {
+            throw new ConfigurationException(\sprintf('the container definition "%s" is a %s, not a %s', $id, get_debug_type($cache), Psr16::class));
+        }
+
+        return $cache;
     }
 
     /** The URL generator bridge with the `router` block (locales, the locale argument); the request host in a web request, `base_url` elsewhere. */
@@ -408,17 +418,17 @@ final class Wiring
         return $generator;
     }
 
-    /** `#[IndexNow(resolver: ...)]` ids: a container id, or a class the container can build (autowiring). */
+    /**
+     * `#[IndexNow(resolver: ...)]` ids: a container id, or a class the container can build (autowiring). A container
+     * that throws (unknown id, cannot autowire) is left to `Url\ArrayResolverLocator`, which turns it into the one
+     * `ConfigurationException` text every adapter of the family prints.
+     */
     private function locateResolver(string $id): ?object
     {
-        try {
-            if (!$this->container->has($id) && !class_exists($id)) {
-                return null;
-            }
-            $resolver = $this->container->get($id);
-        } catch (Throwable $e) {
-            throw new ConfigurationException(\sprintf('IndexNow URL resolver "%s" cannot be built: %s', $id, $e->getMessage()), 0, $e);
+        if (!$this->container->has($id) && !class_exists($id)) {
+            return null;
         }
+        $resolver = $this->container->get($id);
 
         return \is_object($resolver) ? $resolver : null;
     }

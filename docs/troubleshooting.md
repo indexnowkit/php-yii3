@@ -1,5 +1,7 @@
 # Troubleshooting
 
+[Русская версия](troubleshooting.ru.md)
+
 Start with `./yii indexnow:check`, then `./yii indexnow:explain 'App\Model\Post' <id>`, then the `indexnow` log
 category at `debug` (a yiisoft/log target with `categories: ['indexnow']`, `levels: ['error', 'warning', 'info', 'debug']`).
 
@@ -15,7 +17,9 @@ category at `debug` (a yiisoft/log target with `categories: ['indexnow']`, `leve
 | `explain`: `when: published -> false` right after `save()` | the `when` column only has a database default | give the typed property a default, or set it before `save()` |
 | `explain`: `no #[IndexNow] rule` | the class has no attribute and was not registered | add `#[IndexNow]`, `active_record.models` or `observe()` |
 | `debug` log: `change not committed` | the change was rolled back, or the verifier could not see the row | expected for a rollback; for a verifier problem see [commit-safety.md](commit-safety.md) |
-| `warning` log: `staged URL(s) wait for a transaction that is still open` | the request or the command ended inside a transaction | commit before the response is sent; a long command flushes after the commit |
+| `warning` log: `staged URL(s) wait for a transaction that is still open` | the flush happened inside a transaction; the verifier would read uncommitted data | commit before the response is sent, or flush after the commit in a long command. The URLs go out at the first flush after the transaction ends; a request that ends inside it never reaches one |
+| `warning` log: `dropping ... staged URL(s) of a connection whose transaction was still open` | the same connection was still inside a transaction at three flushes in a row (a worker that never closes it) | close the transaction; the URLs are dropped rather than carried into another request |
+| `explain` yields URLs, `via:` or a dotted path through a relation is an error | the record has no `MagicRelationsTrait` | `use MagicRelationsTrait;` next to `EventsTrait`: relations are read through it |
 | `debug` log: `debounced` | the URL was sent within `debounce.per_url` | `--force` on a command, or lower the window |
 | `warning`: `skipping ... unmanaged host` | the URL's host is neither `base_url` nor in `hosts` | add the host to `hosts`, or fix `base_url` |
 | console: `set base_url` in a `ConfigurationException` | URLs are relative and there is no request | set `base_url` |
@@ -28,6 +32,7 @@ category at `debug` (a yiisoft/log target with `categories: ['indexnow']`, `leve
 | `GET /<key>.txt` is 404 | `key_file.enabled` is false, the `routes` group of the package is not merged, or the key differs | `check` prints the route line; `key_file.pattern` must end in `.txt` with a `key` argument |
 | the engines answer 403 | the served body is not the submitted key, a redirect, or a cached old file after a rotation | `curl -i https://host/<key>.txt`; `key_file.cache_max_age` is 300 s on purpose |
 | `check`: `key file ... returned 200` but 403 persists | `hosts` and the submitted host differ (www vs apex) | list every host you submit under `hosts`, set `strict_hosts` |
+| only one host's key file is served, the others answer 404 behind a proxy | every request reaches the origin under the proxy's `Host` | a trusted-proxy middleware before the router ([multi-domain.md](multi-domain.md#behind-a-proxy-or-a-cdn)) |
 
 ## Dispatch
 

@@ -53,15 +53,9 @@ final class ObserverProviderTest extends Yii3TestCase
         self::assertSame('other', $this->logger->records[1]['context']['category']);
     }
 
-    #[TestDox('Env reads $_ENV, $_SERVER and getenv(), treats an empty string as unset, and names the environment from YII_ENV then APP_ENV')]
+    #[TestDox('the environment of the test run is the one tests/bootstrap.php sets (the sources themselves: EnvTest)')]
     public function testEnv(): void
     {
         self::assertSame('test', Env::name(), 'tests/bootstrap.php sets YII_ENV');
-        $_ENV['INDEXNOWKIT_TEST_EMPTY'] = '';
-        self::assertNull(Env::get('INDEXNOWKIT_TEST_EMPTY'));
-        $_SERVER['INDEXNOWKIT_TEST_SERVER'] = 'srv';
-        self::assertSame('srv', Env::get('INDEXNOWKIT_TEST_SERVER'));
-        unset($_ENV['INDEXNOWKIT_TEST_EMPTY'], $_SERVER['INDEXNOWKIT_TEST_SERVER']);
-        self::assertNull(Env::get('INDEXNOWKIT_TEST_NOPE'));
     }
 }

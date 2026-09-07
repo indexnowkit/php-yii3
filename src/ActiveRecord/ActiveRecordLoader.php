@@ -19,6 +19,9 @@ use Yiisoft\ActiveRecord\ActiveRecordInterface;
  */
 final class ActiveRecordLoader implements SubjectLoaderInterface
 {
+    /** Rows read per round trip in {@see all()}; a smaller `--limit` reads that many. */
+    public const BATCH_SIZE = 100;
+
     private readonly ClassNameResolver $classes;
 
     /**
@@ -54,17 +57,28 @@ final class ActiveRecordLoader implements SubjectLoaderInterface
         return [$found, $missing];
     }
 
+    /**
+     * Records of the class up to $limit, read in batches and yielded one by one: `check --sample-class` takes three
+     * of them and stops, and a large `--limit` never has the whole result set in memory at once.
+     *
+     * @return iterable<ActiveRecordInterface>
+     */
     public function all(string $class, int $limit, Event $event): iterable
     {
         $class = self::activeRecordClass($class);
-        $records = [];
-        foreach ($class::query()->limit(max(1, $limit))->all() as $record) {
-            if ($record instanceof ActiveRecordInterface) {
-                $records[] = $record;
+        $limit = max(1, $limit);
+        $yielded = 0;
+        foreach ($class::query()->limit($limit)->batch(min($limit, self::BATCH_SIZE)) as $batch) {
+            foreach ($batch as $record) {
+                if (!$record instanceof ActiveRecordInterface) {
+                    continue;
+                }
+                yield $record;
+                if (++$yielded >= $limit) {
+                    return;
+                }
             }
         }
-
-        return $records;
     }
 
     /**

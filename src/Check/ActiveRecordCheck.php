@@ -16,9 +16,15 @@ final class ActiveRecordCheck implements CheckInterface
     public const CODE = 'active_record.enabled';
 
     /**
-     * @param list<class-string> $models classes hooked through `active_record.models`
+     * @param list<class-string> $models     classes hooked through `active_record.models`
+     * @param list<class-string> $attributed those of them that also carry `#[IndexNowEvents]`
      */
-    public function __construct(private readonly bool $enabled, private readonly bool $observerSet, private readonly array $models = []) {}
+    public function __construct(
+        private readonly bool $enabled,
+        private readonly bool $observerSet,
+        private readonly array $models = [],
+        private readonly array $attributed = [],
+    ) {}
 
     public function check(CheckReport $report): void
     {
@@ -32,6 +38,10 @@ final class ActiveRecordCheck implements CheckInterface
 
             return;
         }
-        $report->ok(\sprintf('active record: records with #[IndexNowEvents] (and EventsTrait)%s are submitted automatically after the response (changes inside a transaction are verified against the row first)', $this->models !== [] ? ' and ' . implode(', ', $this->models) : ''), self::CODE);
+        $report->ok(\sprintf(
+            'active record: records with #[IndexNowEvents] (and EventsTrait)%s are submitted automatically after the response (changes inside a transaction are verified against the row first)%s',
+            $this->models !== [] ? ' and ' . implode(', ', $this->models) : '',
+            $this->attributed !== [] ? \sprintf('; %s carry #[IndexNowEvents] and are listed in active_record.models: they are hooked once, through the attribute', implode(', ', $this->attributed)) : '',
+        ), self::CODE);
     }
 }

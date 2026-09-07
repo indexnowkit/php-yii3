@@ -116,6 +116,30 @@ final class VerifyOnCommitTest extends Yii3TestCase
         self::assertSame([], $this->sentUrls());
     }
 
+    #[TestDox('two saves of one record in one transaction keep both changes: the URLs are joined and the last verifier decides')]
+    public function testTwoChangesOfOneRecordInOneTransactionAreMerged(): void
+    {
+        $post = $this->post('one');
+        $this->transport->posts = [];
+
+        $tx = $this->db()->beginTransaction();
+        $post->slug = 'two';
+        $post->save();
+        $post->slug = 'three';
+        $post->save();
+        $tx->commit();
+        $this->indexNow()->flush();
+
+        // the first change expected slug "two", which the second overwrote: without merging by subject its URLs
+        // (the new page and the deleted "one") would be dropped as "not committed"
+        self::assertEqualsCanonicalizing([
+            'https://www.example.com/posts/one',
+            'https://www.example.com/posts/two',
+            'https://www.example.com/posts/three',
+        ], $this->sentUrls());
+        self::assertStringNotContainsString('change not committed', implode("\n", $this->logger->messages('debug')));
+    }
+
     private function post(string $slug, string $title = 'title'): Post
     {
         $post = new Post();

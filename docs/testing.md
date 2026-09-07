@@ -37,6 +37,21 @@ for an application test case: `Fixtures::container()` builds the container (sqli
 dispatcher from `events-web.php`), `Fixtures::destroy()` resets `ObserverProvider`, `EventDispatcherProvider` and
 `ConnectionProvider` between tests — three static providers of the process.
 
+## Several containers in one process
+
+`ObserverProvider` and `EventDispatcherProvider` of yiisoft/active-record are process-wide, so a test suite (or a
+per-request container in a worker) that builds a second container hands the same classes a second observer. Two
+things keep that honest, and both are automatic:
+
+- `IndexNow::observe()` and the `active_record.models` list **replace** the observed dispatcher of a class instead
+  of wrapping another one around it, so a class is never observed twice and the old container is not held alive by
+  the static provider.
+- `ObserverProvider::reset()` (test support, `@internal`) gives every class its own dispatcher back before it drops
+  the observer. Call it between tests — `Fixtures::destroy()` does.
+
+Without the reset, the classes of the previous test keep pointing at the previous container's observer, and a save
+in the next test submits through a graph whose transport you already stopped looking at.
+
 ## Without HTTP at all
 
 `$container->get(IndexNow::class)->urlsFor($post)` (or `explain($post)`) returns the URLs a record would announce,

@@ -24,6 +24,24 @@ The key file handler serves each host's own key only (a request for `example.de`
 and answers with `Vary: Host`, so a shared CDN never caches one host's file for another. `./yii indexnow:check`
 fetches every host's key file; `--host=example.de` limits it to one.
 
+### Behind a proxy or a CDN
+
+The handler takes the host from the request URI of the PSR-7 request the application hands it — the host the
+application itself believes it is answering under. **Making that host trustworthy is the application's middleware,
+not this package**: behind a load balancer or a CDN the origin sees the proxy's `Host` (or the client's, forged)
+until a trusted-proxy middleware has rewritten the request from `X-Forwarded-Host` / `Forwarded`. In a Yii3
+application that is `Yiisoft\ProxyMiddleware\TrustedHostsNetworkResolver`, and it belongs **before** the router in
+the middleware stack, so every downstream handler — the key file route included — sees the same host.
+
+Two consequences worth knowing:
+
+- Without such a middleware behind a proxy, every host reaches the handler as the proxy's, so only that host's key
+  file is served and the others answer 404. `./yii indexnow:check` fetches the files over HTTP from outside and
+  therefore reports exactly what an engine will see.
+- The same host is what URLs generated during a web request are built on (see the table below), so a proxy that is
+  not resolved makes a request announce its pages under the proxy's hostname. `indexnow:check` run inside a web
+  request warns when that host and `base_url` differ.
+
 ## Rules on another host
 
 ```php

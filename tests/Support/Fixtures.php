@@ -9,6 +9,7 @@ use IndexNowKit\Testing\ArrayLogger;
 use IndexNowKit\Testing\FakeTransport;
 use IndexNowKit\Yii3\ActiveRecord\ObserverProvider;
 use IndexNowKit\Yii3\IndexNow;
+use IndexNowKit\Yii3\Tests\Fixtures\ControlledPost;
 use IndexNowKit\Yii3\Tests\Fixtures\ModelPost;
 use Nyholm\Psr7\Factory\Psr17Factory;
 use Psr\Container\ContainerInterface;
@@ -18,6 +19,8 @@ use Psr\Http\Message\ServerRequestFactoryInterface;
 use Psr\Http\Message\StreamFactoryInterface;
 use Psr\Log\LoggerInterface;
 use Psr\SimpleCache\CacheInterface;
+use Symfony\Component\Console\Application;
+use Symfony\Component\Console\Command\Command;
 use Yiisoft\ActiveRecord\Event\EventDispatcherProvider;
 use Yiisoft\Db\Cache\SchemaCache;
 use Yiisoft\Db\Connection\ConnectionInterface;
@@ -28,7 +31,6 @@ use Yiisoft\Db\Sqlite\Driver;
 use Yiisoft\Di\Container;
 use Yiisoft\Di\ContainerConfig;
 use Yiisoft\EventDispatcher\Dispatcher\Dispatcher;
-use Yiisoft\EventDispatcher\Provider\ListenerCollection;
 use Yiisoft\EventDispatcher\Provider\Provider;
 use Yiisoft\Injector\Injector;
 use Yiisoft\Router\CurrentRoute;
@@ -97,7 +99,11 @@ final class Fixtures
         return $base;
     }
 
-    /** The package's params.php as shipped. */
+    /**
+     * The package's params.php as shipped.
+     *
+     * @return array<string, mixed>
+     */
     public static function params(): array
     {
         return self::load('params', []);
@@ -175,9 +181,48 @@ final class Fixtures
         return $container;
     }
 
+    /**
+     * The `indexnow:*` command map of `config/params-console.php` as yiisoft/yii-console reads it: command name =>
+     * class. The two optional-package entries are the branch of the file, so a test that resolves a command by its
+     * name is the only thing that executes them.
+     *
+     * @return array<string, class-string<Command>>
+     */
+    public static function consoleCommands(): array
+    {
+        $console = self::load('params-console', [])['yiisoft/yii-console'] ?? null;
+        \assert(\is_array($console));
+        $commands = $console['commands'] ?? null;
+        \assert(\is_array($commands));
+
+        /** @var array<string, class-string<Command>> $commands */
+        return $commands;
+    }
+
+    /**
+     * A Symfony console application over {@see consoleCommands()}, every command built by the container: what
+     * `./yii <name>` resolves, names and stubs included.
+     */
+    public static function consoleApplication(ContainerInterface $container): Application
+    {
+        $application = new Application();
+        $application->setAutoExit(false);
+        foreach (self::consoleCommands() as $name => $class) {
+            $command = $container->get($class);
+            \assert($command instanceof Command);
+            $command->setName($name);
+            // addCommands() rather than add() or addCommand(): the first is deprecated in Symfony 7.4, the second
+            // does not exist in 6.4, and this one is in both
+            $application->addCommands([$command]);
+        }
+
+        return $application;
+    }
+
     /** Undo what an application did to the process. */
     public static function destroy(): void
     {
+        ControlledPost::reset();
         ObserverProvider::reset();
         EventDispatcherProvider::reset();
         ConnectionProvider::clear();
@@ -216,6 +261,16 @@ final class Fixtures
             'updated_at' => ColumnBuilder::integer(),
         ])->execute();
         $command->createTable('tags', ['id' => ColumnBuilder::primaryKey(), 'name' => ColumnBuilder::string()->notNull()])->execute();
+        $command->createTable('controlled_posts', ['id' => ColumnBuilder::primaryKey(), 'name' => ColumnBuilder::string()->notNull()])->execute();
+        // a price and a timestamp the database keeps in its own spelling: what the change verifier must not compare
+        $command->createTable('priced_posts', [
+            'id' => ColumnBuilder::primaryKey(),
+            'slug' => ColumnBuilder::string()->notNull(),
+            'price' => ColumnBuilder::decimal(10, 2)->notNull()->defaultValue(0),
+            'published_at' => ColumnBuilder::datetime(),
+        ])->execute();
+        // no primary key at all: verify-on-commit has nothing to re-read the row by
+        $command->createTable('keyless_pages', ['name' => ColumnBuilder::string()->notNull()])->execute();
         $command->createTable('categorized_post_tags', ['post_id' => ColumnBuilder::integer()->notNull(), 'tag_id' => ColumnBuilder::integer()->notNull()])->execute();
         foreach (['untracked', 'broken', 'bad_attribute', 'model_posts', 'items'] as $name) {
             $command->createTable($name, ['id' => ColumnBuilder::primaryKey(), 'name' => ColumnBuilder::string()->notNull()])->execute();
@@ -226,6 +281,8 @@ final class Fixtures
      * The package's config/<group>.php, with `$params` in scope the way yiisoft/config loads it.
      *
      * @param array<string, mixed> $params
+     *
+     * @return array<mixed>
      */
     public static function load(string $group, array $params): array
     {
@@ -248,7 +305,6 @@ final class Fixtures
     {
         $listeners = self::load('events-' . $runtime, []);
         $collection = (new ListenerCollectionFactory(new Injector($container), new CallableFactory($container)))->create($listeners);
-        \assert($collection instanceof ListenerCollection);
 
         return new Dispatcher(new Provider($collection));
     }
