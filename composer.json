@@ -34,7 +34,7 @@
         "php": "^8.2",
         "ext-json": "*",
         "indexnowkit/console": "^0.4",
-        "indexnowkit/core": "^0.12",
+        "indexnowkit/core": "^0.13",
         "psr/container": "^1.1 || ^2.0",
         "psr/event-dispatcher": "^1.0",
         "psr/http-factory": "^1.0",

@@ -5,7 +5,7 @@ All notable changes to `indexnowkit/yii3` are documented here. Versions follow [
 
 ## [0.1.0] — Unreleased
 
-First release: the Yii3 adapter of the family (spec 15), on `indexnowkit/core` 0.12 and `indexnowkit/console` 0.4.
+First release: the Yii3 adapter of the family (spec 15), on `indexnowkit/core` 0.13 and `indexnowkit/console` 0.4.
 
 ### Added
 
@@ -37,9 +37,12 @@ First release: the Yii3 adapter of the family (spec 15), on `indexnowkit/core` 0
 - **Checks** in `indexnow:check`: `dispatch.mode`, `debounce.store` (the core check with a container probe),
   `router.key_file` / `router.route`, `active_record.enabled`, plus the lines of the optional packages and the
   `checks` option (container ids of your own `CheckInterface`).
-- **Optional packages** through `Sitemap\Adapter\SitemapServices`, `Verify\Adapter\VerifyServices` and
-  `History\Adapter\HistoryServices`: the history store over the container's `ConnectionInterface` (`history.pdo.service`)
-  or PSR-16 cache, the pre-flight transport under the container id `IndexNow::VERIFY_TRANSPORT`.
+- **Optional packages** behind the core's predicates (`Adapter\OptionalPackage::sitemap()` / `verify()` / `history()`,
+  core 0.13.0: the service asks about a package without loading a class of it; the CI job `optional-packages-absent`
+  boots the container with the three removed) and wired through `Sitemap\Adapter\SitemapServices`,
+  `Verify\Adapter\VerifyServices` and `History\Adapter\HistoryServices`: the history store over the container's
+  `ConnectionInterface` (`history.pdo.service`) or PSR-16 cache, the pre-flight transport under the container id
+  `IndexNow::VERIFY_TRANSPORT`.
 - Documentation EN/RU, `docs/{bc,commit-safety,configuration,extending,multi-domain,testing,troubleshooting}.md`.
 
 ### Not in this release
