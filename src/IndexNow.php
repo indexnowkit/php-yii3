@@ -294,12 +294,12 @@ final class IndexNow
 
     /**
      * The optional `indexnowkit/sitemap` behind its one predicate: the `sitemapInstalled` argument, else detection.
-     * Built from the core's `OptionalPackage` directly: the package's own `SitemapServices` cannot be loaded when the
-     * package is absent, and this predicate is what says so.
+     * The core's `OptionalPackage::sitemap()`, not the package's `SitemapServices::package()`: the package's class
+     * cannot be loaded when the package is absent, and this predicate is what says so.
      */
     public function sitemapPackage(): OptionalPackage
     {
-        return new OptionalPackage('indexnowkit/sitemap', \IndexNowKit\Sitemap\SitemapReader::class, 'sitemap', $this->sitemapInstalled);
+        return OptionalPackage::sitemap($this->sitemapInstalled);
     }
 
     public function sitemapInstalled(): bool
@@ -339,7 +339,7 @@ final class IndexNow
     /** The optional `indexnowkit/verify` behind its one predicate. */
     public function verifyPackage(): OptionalPackage
     {
-        return new OptionalPackage('indexnowkit/verify', \IndexNowKit\Verify\PageSignals::class, 'verify', $this->verifyInstalled);
+        return OptionalPackage::verify($this->verifyInstalled);
     }
 
     public function verifyInstalled(): bool
@@ -414,7 +414,7 @@ final class IndexNow
     /** The optional `indexnowkit/history` behind its one predicate. */
     public function historyPackage(): OptionalPackage
     {
-        return new OptionalPackage('indexnowkit/history', \IndexNowKit\History\HistoryConfig::class, 'history', $this->historyInstalled);
+        return OptionalPackage::history($this->historyInstalled);
     }
 
     public function historyInstalled(): bool
