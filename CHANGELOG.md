@@ -3,7 +3,7 @@
 All notable changes to `indexnowkit/yii3` are documented here. Versions follow [SemVer](https://semver.org); before
 1.0 a minor version may break, every break is listed under "Changed" with a migration note.
 
-## [0.1.0] — Unreleased
+## [0.1.0] — 2026-09-08
 
 First release: the Yii3 adapter of the family (spec 15), on `indexnowkit/core` 0.13 and `indexnowkit/console` 0.4.
 
