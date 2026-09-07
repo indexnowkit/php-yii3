@@ -266,7 +266,7 @@ final class IndexNowObserver
     public function flushStaging(): void
     {
         foreach (iterator_to_array($this->detached) as $scope) {
-            $this->detached->detach($scope);
+            $this->detached->offsetUnset($scope);
             $this->flushScope($scope);
         }
         foreach (iterator_to_array($this->connections) as $db) {
@@ -354,8 +354,8 @@ final class IndexNowObserver
         try {
             $db = $record->db();
             if ($db->getTransaction() !== null) {
-                if (!$this->connections->contains($db)) {
-                    $this->connections->attach($db, 0);
+                if (!$this->connections->offsetExists($db)) {
+                    $this->connections->offsetSet($db, 0);
                 }
                 $this->staging->stage($db, $verifier, $urls, $subject, $key);
 
@@ -365,7 +365,7 @@ final class IndexNowObserver
             // the very case staging exists for: the transaction may roll back, so the URLs are held on the record
             // itself and the verifier decides at the flush (a verifier that throws there submits with a warning)
             $this->logger->error('indexnow: cannot inspect the transaction state of {class}, the URLs are staged until the end of the unit of work: {error}', ['class' => $record::class, 'error' => $e->getMessage(), 'exception' => $e]);
-            $this->detached->attach($record, true);
+            $this->detached->offsetSet($record, true);
             $this->staging->stage($record, $verifier, $urls, $subject, $key);
 
             return;
@@ -386,7 +386,7 @@ final class IndexNowObserver
 
     private function reportOpenTransaction(ConnectionInterface $db): void
     {
-        $reports = ($this->connections->contains($db) ? $this->connections[$db] : 0) + 1;
+        $reports = ($this->connections->offsetExists($db) ? $this->connections[$db] : 0) + 1;
         $count = $this->staging->pendingCount($db);
         if ($reports > self::OPEN_TRANSACTION_REPORTS) {
             $this->forget($db);
@@ -401,7 +401,7 @@ final class IndexNowObserver
 
     private function forget(ConnectionInterface $db): void
     {
-        $this->connections->detach($db);
+        $this->connections->offsetUnset($db);
     }
 
     /**
