@@ -6,6 +6,7 @@ namespace IndexNowKit\Yii3\Tests\Support;
 
 use IndexNowKit\Http\TransportInterface;
 use IndexNowKit\Testing\ArrayLogger;
+use IndexNowKit\Testing\Conformance\Arrays;
 use IndexNowKit\Testing\FakeTransport;
 use IndexNowKit\Yii3\ActiveRecord\ObserverProvider;
 use IndexNowKit\Yii3\IndexNow;
@@ -91,12 +92,7 @@ final class Fixtures
      */
     public static function merge(array $base, array $overrides): array
     {
-        foreach ($overrides as $key => $value) {
-            $current = $base[$key] ?? null;
-            $base[$key] = \is_array($value) && $value !== [] && !array_is_list($value) && \is_array($current) ? self::merge($current, $value) : $value;
-        }
-
-        return $base;
+        return Arrays::merge($base, $overrides);
     }
 
     /**
