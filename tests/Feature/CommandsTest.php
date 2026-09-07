@@ -1,0 +1,238 @@
+<?php
+
+declare(strict_types=1);
+
+namespace IndexNowKit\Yii3\Tests\Feature;
+
+use IndexNowKit\Http\Response;
+use IndexNowKit\Key\KeyValidator;
+use IndexNowKit\Testing\Conformance\CheckOutputAssertions;
+use IndexNowKit\Yii3\Console\CheckCommand;
+use IndexNowKit\Yii3\Console\ConfigCommand;
+use IndexNowKit\Yii3\Console\ExplainCommand;
+use IndexNowKit\Yii3\Console\KeyGenerateCommand;
+use IndexNowKit\Yii3\Console\SitemapCommand;
+use IndexNowKit\Yii3\Console\SubmitCommand;
+use IndexNowKit\Yii3\Console\SubmitRecordCommand;
+use IndexNowKit\Yii3\Tests\Fixtures\ModelPost;
+use IndexNowKit\Yii3\Tests\Fixtures\Post;
+use IndexNowKit\Yii3\Tests\Yii3TestCase;
+use PHPUnit\Framework\Attributes\TestDox;
+
+final class CommandsTest extends Yii3TestCase
+{
+    protected function console(): bool
+    {
+        return true;
+    }
+
+    #[TestDox('H04 indexnow:check with reachable key files -> exit 0, host, engine and wiring lines')]
+    public function testCheckOk(): void
+    {
+        $this->stubKeyFiles();
+
+        [$code, $output] = $this->yii(CheckCommand::class);
+
+        CheckOutputAssertions::assertExitCode(0, $code, $output);
+        CheckOutputAssertions::assertReady($output, 'www.example.com', 'example.de');
+        foreach (['engines: api', 'dispatch "sync"', 'debounce: off', 'spooled in memory', 'active record: records with #[IndexNowEvents] (and EventsTrait) and ' . ModelPost::class, 'key file: served at /<key>.txt (route indexnow/key-file)'] as $expected) {
+            self::assertStringContainsString($expected, $output);
+        }
+    }
+
+    #[TestDox('H05 indexnow:check when the key file answers 403 -> exit 1 with the hint')]
+    public function testCheckForbidden(): void
+    {
+        $this->transport->onGet('https://www.example.com/' . self::KEY . '.txt', new Response(403));
+        $this->transport->onGet('https://example.de/' . self::SECOND_KEY . '.txt', new Response(200, self::SECOND_KEY));
+
+        [$code, $output] = $this->yii(CheckCommand::class);
+
+        CheckOutputAssertions::assertExitCode(1, $code, $output);
+        CheckOutputAssertions::assertKeyFileHint($output, 403);
+    }
+
+    #[TestDox('indexnow:config --json prints the effective configuration with masked keys and the Yii3-only keys')]
+    public function testConfig(): void
+    {
+        [$code, $output] = $this->yii(ConfigCommand::class, ['--json' => true]);
+
+        self::assertSame(0, $code, $output);
+        $decoded = json_decode($output, true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($decoded);
+        self::assertStringNotContainsString(self::KEY, $output);
+        self::assertSame(KeyValidator::mask(self::KEY), $decoded['config']['key']);
+        self::assertArrayHasKey('active_record', $decoded['adapter'], 'the Yii3 blocks are reported as given');
+        self::assertArrayNotHasKey('key', $decoded['adapter']);
+
+        [$code, $output] = $this->yii(ConfigCommand::class);
+        self::assertSame(0, $code);
+        self::assertStringContainsString('debounce.per_url', $output);
+        self::assertStringNotContainsString(self::KEY, $output);
+    }
+
+    #[TestDox('indexnow:check --host limits the key file check to one host')]
+    public function testCheckOnlyHost(): void
+    {
+        $this->transport->onGet('https://example.de/' . self::SECOND_KEY . '.txt', new Response(200, self::SECOND_KEY));
+
+        [$code] = $this->yii(CheckCommand::class, ['--host' => ['example.de']]);
+
+        self::assertSame(0, $code);
+        self::assertSame(['https://example.de/' . self::SECOND_KEY . '.txt', 'https://example.de/robots.txt'], $this->transport->gets, 'the key file and robots.txt of that host only');
+    }
+
+    #[TestDox('indexnow:key:generate prints a 32-char hex key; --alphanumeric --length change alphabet and length; --write-env writes and rotates')]
+    public function testKeyGenerate(): void
+    {
+        [$code, $output] = $this->yii(KeyGenerateCommand::class);
+        self::assertSame(0, $code);
+        self::assertMatchesRegularExpression('/INDEXNOW_KEY=[0-9a-f]{32}/', $output);
+        self::assertStringContainsString('./yii indexnow:check', $output);
+
+        [$code, $output] = $this->yii(KeyGenerateCommand::class, ['--length' => '16', '--alphanumeric' => true]);
+        self::assertSame(0, $code);
+        self::assertMatchesRegularExpression('/^[A-Za-z0-9]{16}$/m', $output);
+
+        $file = tempnam(sys_get_temp_dir(), 'env');
+        self::assertIsString($file);
+        try {
+            [$code] = $this->yii(KeyGenerateCommand::class, ['--write-env' => $file]);
+            self::assertSame(0, $code);
+            $first = (string) file_get_contents($file);
+            self::assertMatchesRegularExpression('/^INDEXNOW_KEY=[0-9a-f]{32}\n$/', $first);
+            [$code, $output] = $this->yii(KeyGenerateCommand::class, ['--write-env' => $file]);
+            self::assertSame(0, $code);
+            self::assertStringContainsString('nothing to do', $output);
+            [$code, $output] = $this->yii(KeyGenerateCommand::class, ['--write-env' => $file, '--force' => true]);
+            self::assertSame(0, $code);
+            self::assertStringContainsString('Rotating the key', $output);
+            self::assertNotSame($first, file_get_contents($file));
+        } finally {
+            @unlink($file);
+        }
+    }
+
+    #[TestDox('indexnow:submit sends the URLs and prints a table; --json prints results; --dry-run sends nothing; a failed engine answer gives exit 1')]
+    public function testSubmit(): void
+    {
+        [$code, $output] = $this->yii(SubmitCommand::class, ['urls' => ['/a', 'https://www.example.com/b']]);
+        self::assertSame(0, $code, $output);
+        self::assertMatchesRegularExpression('/\bapi\s+www\.example\.com\s+2\s+ok\b/', $output);
+        self::assertSame(['https://www.example.com/a', 'https://www.example.com/b'], $this->sentUrls());
+
+        [$code, $output] = $this->yii(SubmitCommand::class, ['urls' => ['/c'], '--json' => true]);
+        self::assertSame(0, $code);
+        self::assertStringContainsString('"status": "ok"', $output);
+
+        [$code, $output] = $this->yii(SubmitCommand::class, ['urls' => ['/d'], '--dry-run' => true]);
+        self::assertSame(0, $code);
+        self::assertStringContainsString('dry_run', $output);
+        self::assertCount(2, $this->transport->posts);
+
+        $this->transport->willRespond(new Response(403));
+        [$code] = $this->yii(SubmitCommand::class, ['urls' => ['/e']]);
+        self::assertSame(1, $code);
+    }
+
+    #[TestDox('indexnow:submit-record resolves records through their rules; --explain lists rule and URL; unknown class and id are reported')]
+    public function testSubmitRecord(): void
+    {
+        foreach ([['one', true], ['two', true], ['draft', false]] as [$slug, $published]) {
+            $post = new Post();
+            $post->slug = $slug;
+            $post->published = $published;
+            $post->save();
+        }
+        $this->kit()->flush();
+        $this->transport->posts = [];
+
+        [$code, $output] = $this->yii(SubmitRecordCommand::class, ['class' => 'Post']);
+        self::assertSame(0, $code, $output);
+        self::assertStringContainsString('3 records -> 2 URL(s)', $output);
+        self::assertEqualsCanonicalizing(['https://www.example.com/posts/one', 'https://www.example.com/posts/two'], $this->sentUrls());
+
+        [$code, $output] = $this->yii(SubmitRecordCommand::class, ['class' => 'Post', 'ids' => ['1'], '--explain' => true]);
+        self::assertSame(0, $code);
+        self::assertStringContainsString('https://www.example.com/posts/one', $output);
+        self::assertCount(1, $this->transport->posts, '--explain sends nothing');
+
+        [$code, $output] = $this->yii(SubmitRecordCommand::class, ['class' => 'Post', 'ids' => ['999']]);
+        self::assertSame(2, $code);
+        self::assertStringContainsString('not found', $output);
+        [$code] = $this->yii(SubmitRecordCommand::class, ['class' => 'Nope']);
+        self::assertSame(2, $code);
+        [$code, $output] = $this->yii(SubmitRecordCommand::class, ['class' => 'Post', '--event' => 'moved']);
+        self::assertSame(2, $code);
+        self::assertStringContainsString('--event must be', $output);
+    }
+
+    #[TestDox('indexnow:explain walks rule, when, URL, key and debounce for one record and sends nothing')]
+    public function testExplain(): void
+    {
+        $post = new Post();
+        $post->slug = 'why';
+        $post->published = false;
+        $post->save();
+        $this->kit()->flush();
+
+        [$code, $output] = $this->yii(ExplainCommand::class, ['class' => 'Post', 'id' => (string) $post->id]);
+        self::assertSame(0, $code, $output);
+        self::assertStringContainsString('Rule "post/view" (route post/view)', $output);
+        self::assertMatchesRegularExpression('/when: published \((false|0)\) -> false/', $output, 'the value the condition read is shown');
+        self::assertStringContainsString('No URL would be submitted', $output);
+
+        $post->published = true;
+        $post->save();
+        $this->kit()->flush();
+        [$code, $output] = $this->yii(ExplainCommand::class, ['class' => 'Post', 'id' => (string) $post->id]);
+        self::assertSame(0, $code);
+        self::assertStringContainsString('https://www.example.com/posts/why', $output);
+        self::assertStringContainsString('host www.example.com, key abcd', $output);
+        self::assertStringContainsString('./yii indexnow:submit-record', $output);
+        self::assertCount(1, $this->transport->posts);
+
+        [$code] = $this->yii(ExplainCommand::class, ['class' => 'Post', 'id' => '999']);
+        self::assertSame(2, $code);
+    }
+
+    #[TestDox('indexnow:sitemap reads a local sitemap, submits in batches and prints a summary; --dry-run lists; --json is machine-readable; no argument uses <base_url>/sitemap.xml')]
+    public function testSitemap(): void
+    {
+        $file = tempnam(sys_get_temp_dir(), 'sitemap');
+        self::assertIsString($file);
+        file_put_contents($file, '<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://www.example.com/s1</loc><lastmod>2026-01-01</lastmod></url><url><loc>https://www.example.com/s2</loc><lastmod>2020-01-01</lastmod></url></urlset>');
+        try {
+            [$code, $output] = $this->yii(SitemapCommand::class, ['sitemap' => $file, '--dry-run' => true]);
+            self::assertSame(0, $code, $output);
+            self::assertStringContainsString('* https://www.example.com/s1', $output);
+            self::assertStringContainsString('2 URL(s) found', $output);
+            self::assertSame([], $this->transport->posts);
+
+            [$code, $output] = $this->yii(SitemapCommand::class, ['sitemap' => $file]);
+            self::assertSame(0, $code);
+            self::assertSame(['https://www.example.com/s1', 'https://www.example.com/s2'], $this->sentUrls());
+
+            [$code, $output] = $this->yii(SitemapCommand::class, ['sitemap' => $file, '--changed-since' => '2021-01-01', '--json' => true]);
+            self::assertSame(0, $code);
+            self::assertStringContainsString('"url_count": 1', $output);
+
+            [$code] = $this->yii(SitemapCommand::class, ['sitemap' => $file, '--changed-since' => 'not a date']);
+            self::assertSame(2, $code);
+        } finally {
+            @unlink($file);
+        }
+
+        $this->transport->onGet('https://www.example.com/sitemap.xml', new Response(200, '<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://www.example.com/d1</loc></url></urlset>'));
+        $this->transport->posts = [];
+        [$code] = $this->yii(SitemapCommand::class);
+        self::assertSame(0, $code);
+        self::assertSame(['https://www.example.com/d1'], $this->sentUrls());
+    }
+
+    private function stubKeyFiles(): void
+    {
+        $this->transport->onGet('https://www.example.com/' . self::KEY . '.txt', new Response(200, self::KEY));
+        $this->transport->onGet('https://example.de/' . self::SECOND_KEY . '.txt', new Response(200, self::SECOND_KEY));
+    }
+}

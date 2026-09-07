@@ -1,0 +1,130 @@
+{
+    "name": "indexnowkit/yii3",
+    "description": "IndexNow for Yii3: notify Yandex, Bing, Naver and Seznam when ActiveRecord rows change. #[IndexNow] attribute on the model, commit-safe without transaction hooks, key file route, console commands, config plugin.",
+    "type": "library",
+    "license": "MIT",
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "keywords": [
+        "indexnow",
+        "yii3",
+        "yiisoft",
+        "activerecord",
+        "seo",
+        "yandex",
+        "bing",
+        "indexing",
+        "psr-18",
+        "psr-3"
+    ],
+    "homepage": "https://indexnowkit.github.io/php/yii3/",
+    "authors": [
+        {
+            "name": "Igor Pinchuk",
+            "email": "i.pinchuk.work@gmail.com"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/indexnowkit/php/issues",
+        "source": "https://github.com/indexnowkit/php-yii3",
+        "docs": "https://github.com/indexnowkit/php-yii3/blob/main/README.md",
+        "security": "https://github.com/indexnowkit/php-yii3/blob/main/SECURITY.md"
+    },
+    "require": {
+        "php": "^8.2",
+        "ext-json": "*",
+        "indexnowkit/console": "^0.4",
+        "indexnowkit/core": "^0.12",
+        "psr/container": "^1.1 || ^2.0",
+        "psr/event-dispatcher": "^1.0",
+        "psr/http-factory": "^1.0",
+        "psr/http-message": "^1.1 || ^2.0",
+        "psr/http-server-handler": "^1.0",
+        "psr/http-server-middleware": "^1.0",
+        "psr/log": "^2.0 || ^3.0",
+        "psr/simple-cache": "^1.0 || ^2.0 || ^3.0",
+        "symfony/console": "^6.4 || ^7.0 || ^8.0",
+        "yiisoft/active-record": "^1.0",
+        "yiisoft/db": "^2.0",
+        "yiisoft/router": "^4.0"
+    },
+    "require-dev": {
+        "indexnowkit/history": "^0.3",
+        "indexnowkit/sitemap": "^0.7",
+        "indexnowkit/testing": "^0.3",
+        "indexnowkit/verify": "^0.3",
+        "nyholm/psr7": "^1.8",
+        "phpstan/phpstan": "^2.2.13",
+        "phpstan/phpstan-strict-rules": "^2.0.12",
+        "phpunit/phpunit": "^11.5",
+        "roave/security-advisories": "dev-latest",
+        "yiisoft/cache": "^3.0",
+        "yiisoft/config": "^1.6",
+        "yiisoft/db-sqlite": "^2.0",
+        "yiisoft/di": "^1.4",
+        "yiisoft/event-dispatcher": "^1.1",
+        "yiisoft/router-fastroute": "^4.0",
+        "yiisoft/yii-console": "^2.4",
+        "yiisoft/yii-event": "^2.2",
+        "yiisoft/yii-http": "^1.1"
+    },
+    "conflict": {
+        "indexnowkit/history": "<0.3",
+        "indexnowkit/sitemap": "<0.7",
+        "indexnowkit/verify": "<0.3"
+    },
+    "suggest": {
+        "indexnowkit/sitemap": "The indexnow:sitemap command (^0.7)",
+        "indexnowkit/verify": "Pre-flight GET of every URL before submission — noindex, robots.txt, canonical, redirects (^0.3; verify.enabled: true)",
+        "indexnowkit/history": "Submission history in the PSR-16 cache or a database table, the indexnow:history and indexnow:status commands (^0.3; history.store: psr16|pdo)",
+        "yiisoft/config": "Picks up the package's config/*.php (params, di, routes, events, bootstrap, commands) without any wiring in the application",
+        "yiisoft/yii-http": "The AfterEmit event the package flushes on after the response is sent",
+        "yiisoft/yii-console": "The console application the indexnow:* commands are registered in (params-console)",
+        "yiisoft/yii-event": "Reads the package's events-web.php / events-console.php",
+        "symfony/http-client": "PSR-18 client for the submissions (with nyholm/psr7); any PSR-18 client works",
+        "nyholm/psr7": "PSR-17 factories for the PSR-18 client"
+    },
+    "autoload": {
+        "psr-4": {
+            "IndexNowKit\\Yii3\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "IndexNowKit\\Yii3\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "stan": "phpstan analyse --memory-limit=1G",
+        "ci:install:highest": "@composer update --no-interaction --prefer-dist",
+        "ci:install:lowest": "@composer update --no-interaction --prefer-dist --prefer-lowest --prefer-stable"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "yiisoft/config": true,
+            "php-http/discovery": false
+        }
+    },
+    "extra": {
+        "branch-alias": {
+            "dev-main": "0.1.x-dev"
+        },
+        "config-plugin-options": {
+            "source-directory": "config",
+            "build-merge-plan": false
+        },
+        "config-plugin": {
+            "params": "params.php",
+            "params-console": "params-console.php",
+            "di": "di.php",
+            "di-web": "di-web.php",
+            "di-console": "di-console.php",
+            "events-web": "events-web.php",
+            "events-console": "events-console.php",
+            "routes": "routes.php",
+            "bootstrap": "bootstrap.php"
+        }
+    }
+}
