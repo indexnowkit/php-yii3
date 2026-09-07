@@ -70,8 +70,8 @@ final class ChecksTest extends Yii3TestCase
         );
 
         self::assertSame([CheckLevel::Ok], $this->levels($check), 'the real yiisoft/cache accepted the probe key');
-        self::assertStringNotContainsString(':', CacheProbe::KEY);
-        self::assertSame(1, $strict->get(CacheProbe::KEY));
+        self::assertStringNotContainsString(':', DebounceStoreCheck::PROBE_KEY);
+        self::assertSame(1, $strict->get(DebounceStoreCheck::PROBE_KEY));
     }
 
     #[TestDox('router: a web request on a host other than base_url is a warning naming both')]

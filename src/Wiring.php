@@ -20,6 +20,7 @@ use IndexNowKit\Debounce\DebounceStoreInterface;
 use IndexNowKit\Dispatch\DispatcherInterface;
 use IndexNowKit\Exception\ConfigurationException;
 use IndexNowKit\History\Adapter\HistoryServices;
+use IndexNowKit\Http\TransportFactory;
 use IndexNowKit\Http\TransportInterface;
 use IndexNowKit\Key\KeyProviderInterface;
 use IndexNowKit\Sitemap\Adapter\SitemapServices;
@@ -47,9 +48,9 @@ use PDO;
 use Psr\Clock\ClockInterface;
 use Psr\Container\ContainerInterface;
 use Psr\EventDispatcher\EventDispatcherInterface;
+use Psr\Http\Message\RequestFactoryInterface;
+use Psr\Http\Message\StreamFactoryInterface;
 use Psr\SimpleCache\CacheInterface as Psr16;
-use ReflectionClass;
-use Throwable;
 use Yiisoft\Db\Connection\ConnectionInterface;
 use Yiisoft\Db\Driver\Pdo\PdoConnectionInterface;
 use Yiisoft\Router\CurrentRoute;
@@ -236,21 +237,18 @@ final class Wiring
 
     /**
      * The debounce store as `./yii indexnow:status` describes it: `memory`, `none`, or `<container id> (<class>)` of
-     * the PSR-16 cache behind `debounce.store` (`missing` when the container has no such id).
+     * the PSR-16 cache behind `debounce.store` (`missing` when the container has no such id) — the text of
+     * `HistoryServices::describeStore()`, shared with Laravel and Yii2.
      */
     public function debounceStoreDescription(): string
     {
-        $store = $this->indexNow->config()->debounceStore ?? IndexNow::DEFAULT_DEBOUNCE_STORE;
-        if (\in_array($store, [DebounceStoreFactory::MEMORY, DebounceStoreFactory::NONE], true)) {
-            return $store;
-        }
-        try {
-            $cache = $this->container->has($store) ? $this->container->get($store) : null;
-        } catch (Throwable) {
-            $cache = null;
-        }
+        $container = $this->container;
 
-        return \sprintf('%s (%s)', $store, \is_object($cache) ? (new ReflectionClass($cache))->getShortName() : 'missing');
+        return HistoryServices::describeStore($this->indexNow->config()->debounceStore, IndexNow::DEFAULT_DEBOUNCE_STORE, static function (string $id) use ($container): ?object {
+            $cache = $container->has($id) ? $container->get($id) : null;
+
+            return \is_object($cache) ? $cache : null;
+        });
     }
 
     /** The `--sample` / `--sample-class` values of the running `indexnow:check`: one holder in the container, the command fills it. */
@@ -318,11 +316,13 @@ final class Wiring
         // The container is asked when the node is first used, not while the graph is described: build() does no IO.
         $builder->events(static fn(): ?object => $container->has(EventDispatcherInterface::class) ? self::service($container, EventDispatcherInterface::class) : null);
         $store = $config->debounceStore ?? IndexNow::DEFAULT_DEBOUNCE_STORE;
-        if (!\in_array($store, [DebounceStoreFactory::MEMORY, DebounceStoreFactory::NONE], true)) {
+        if (DebounceStoreFactory::isShared($store)) {
             // The 403 counter (and the robots cache of verify) share the PSR-16 cache behind `debounce.store`; memory/none leave it in the process.
             $builder->failureCache(static fn(): ?Psr16 => $container->has($store) && ($cache = $container->get($store)) instanceof Psr16 ? $cache : null);
         }
         match ($except) {
+            // the transport over the container's PSR-17 factories when it has them (no php-http/discovery then), else discovery
+            Services::TRANSPORT => $builder->transport(static fn(Services $s): TransportInterface => TransportFactory::lazy($s->config, static fn(string $id): mixed => $container->get($id), requestFactory: self::psr17($container, RequestFactoryInterface::class), streamFactory: self::psr17($container, StreamFactoryInterface::class))),
             Services::DEBOUNCE_STORE => $builder->debounceStore(static fn(Services $s): DebounceStoreInterface => DebounceStoreFactory::fromConfig($s->config, static fn(string $id): mixed => $container->get($id), IndexNow::DEFAULT_DEBOUNCE_STORE, $s->clock())),
             Services::SUBMISSION_STORE => $indexNow->historyEnabled() ? $builder->submissionStore(static fn(Services $s): SubmissionStoreInterface => HistoryServices::storeFor(
                 $indexNow->historyConfig(),
@@ -412,6 +412,26 @@ final class Wiring
         return $cache;
     }
 
+    /**
+     * A PSR-17 factory of the container under its interface, null when the container has none (the transport then
+     * discovers one).
+     *
+     * @template T of object
+     *
+     * @param class-string<T> $interface
+     *
+     * @return T|null
+     */
+    private static function psr17(ContainerInterface $container, string $interface): ?object
+    {
+        if (!$container->has($interface)) {
+            return null;
+        }
+        $factory = $container->get($interface);
+
+        return $factory instanceof $interface ? $factory : null;
+    }
+
     /** The URL generator bridge with the `router` block (locales, the locale argument); the request host in a web request, `base_url` elsewhere. */
     private function routerBridge(Services $services): RouteUrlResolverInterface
     {
@@ -426,6 +446,7 @@ final class Wiring
             $currentRoute instanceof CurrentRoute ? $currentRoute : null,
             $locales,
             \is_string($parameter) && $parameter !== '' ? $parameter : IndexNow::DEFAULT_LOCALE_PARAMETER,
+            $services->logger,
         );
     }
 

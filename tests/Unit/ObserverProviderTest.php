@@ -17,6 +17,7 @@ final class ObserverProviderTest extends Yii3TestCase
     public function testUnsetProviderWarnsOnce(): void
     {
         ObserverProvider::reset();
+        ObserverProvider::resetLogger(); // before any bootstrap: no logger to warn through
         $warnings = [];
         set_error_handler(static function (int $level, string $message) use (&$warnings): bool {
             $warnings[] = [$level, $message];
@@ -39,6 +40,31 @@ final class ObserverProviderTest extends Yii3TestCase
         self::assertStringContainsString('config/bootstrap.php did not run', $warnings[0][1]);
         $this->kit()->flush();
         self::assertSame([], $this->transport->posts);
+    }
+
+    #[TestDox('once the bootstrap gave the provider the logger, a save without an observer is one PSR-3 warning, not an E_USER_WARNING')]
+    public function testWarningGoesToTheLoggerTheBootstrapGave(): void
+    {
+        ObserverProvider::reset(); // the observer is gone, the logger of the bootstrap stays
+        $raised = 0;
+        set_error_handler(static function () use (&$raised): bool {
+            ++$raised;
+
+            return true;
+        }, E_USER_WARNING);
+        try {
+            foreach (['one', 'two'] as $slug) {
+                $post = new Post();
+                $post->slug = $slug;
+                $post->save();
+            }
+        } finally {
+            restore_error_handler();
+        }
+
+        self::assertSame(0, $raised);
+        $warnings = array_values(array_filter($this->logger->messages('warning'), static fn(string $m): bool => str_contains($m, 'config/bootstrap.php did not run')));
+        self::assertCount(1, $warnings, 'once per process, in the application log');
     }
 
     #[TestDox('the category logger adds the category context and keeps one the line already names')]

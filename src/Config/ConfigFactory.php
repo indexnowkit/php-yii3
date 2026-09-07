@@ -8,9 +8,6 @@ use IndexNowKit\Adapter\ConfigFactory as CoreConfigFactory;
 use IndexNowKit\Adapter\OptionalPackage;
 use IndexNowKit\Config;
 use IndexNowKit\Exception\ConfigurationException;
-use IndexNowKit\History\Adapter\HistoryServices;
-use IndexNowKit\Sitemap\Adapter\SitemapServices;
-use IndexNowKit\Verify\Adapter\VerifyServices;
 use IndexNowKit\Yii3\Http\KeyFileHandler;
 use IndexNowKit\Yii3\IndexNow;
 use Psr\Log\LoggerInterface;
@@ -57,17 +54,12 @@ final class ConfigFactory
     public static function factory(array $options, OptionalPackage $sitemap, OptionalPackage $verify, OptionalPackage $history): CoreConfigFactory
     {
         return new CoreConfigFactory(
-            ownedOptions: [
-                ...self::YII3_OPTIONS,
-                ...$sitemap->installed() ? SitemapServices::options() : [],
-                ...$verify->installed() ? VerifyServices::options() : [],
-                ...$history->installed() ? HistoryServices::options() : [],
-            ],
+            ownedOptions: [...self::YII3_OPTIONS, ...OptionalPackage::ownedOptions([$sitemap, $verify, $history])],
             dispatchModes: self::DISPATCH_MODES,
             needBaseUrl: [],
             defaults: self::DEFAULTS,
             checkCommand: IndexNow::CHECK_COMMAND,
-            ignoreBlocks: [...$sitemap->installed() ? [] : ['sitemap'], ...$verify->installed() ? [] : ['verify'], ...$history->installed() ? [] : ['history']],
+            ignoreBlocks: OptionalPackage::ignoredBlocks([$sitemap, $verify, $history]),
         );
     }
 

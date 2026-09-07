@@ -15,6 +15,7 @@ use IndexNowKit\Config;
 use IndexNowKit\Console\ResultFormatterInterface;
 use IndexNowKit\Console\ResultRenderer;
 use IndexNowKit\Console\SubjectLoaderInterface;
+use IndexNowKit\Console\SubjectSampler;
 use IndexNowKit\Console\Vocabulary;
 use IndexNowKit\Debounce\DebounceStoreInterface;
 use IndexNowKit\Dispatch\DispatcherInterface;
@@ -35,7 +36,6 @@ use IndexNowKit\Url\UrlNormalizerInterface;
 use IndexNowKit\Url\UrlResolverInterface;
 use IndexNowKit\Yii3\ActiveRecord\ActiveRecordLoader;
 use IndexNowKit\Yii3\ActiveRecord\IndexNowObserver;
-use IndexNowKit\Yii3\Check\RecordSampler;
 use IndexNowKit\Yii3\IndexNow;
 use IndexNowKit\Yii3\Wiring;
 use Psr\Clock\ClockInterface;
@@ -105,7 +105,7 @@ return [
     // of indexnowkit/console writes the options into it and knows nothing of ActiveRecord
     SampleOptions::class => static function (SubjectLoaderInterface $records, IndexNow $indexNow): SampleOptions {
         $samples = new SampleOptions();
-        $samples->sampler = static fn(string $class, ?string $id): array => (new RecordSampler($records, $indexNow->kit()))($class, $id);
+        $samples->sampler = static fn(string $class, ?string $id): array => (new SubjectSampler($records, $indexNow->kit()))($class, $id);
 
         return $samples;
     },

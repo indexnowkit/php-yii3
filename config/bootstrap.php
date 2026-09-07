@@ -18,10 +18,9 @@ return [
     static function (ContainerInterface $container): void {
         $observer = $container->get(IndexNowObserver::class);
         assert($observer instanceof IndexNowObserver);
-        ObserverProvider::set($observer);
-
         $indexNow = $container->get(IndexNow::class);
         assert($indexNow instanceof IndexNow);
+        ObserverProvider::set($observer, $indexNow->logger());
         foreach ($indexNow->modelClasses() as $class) {
             $indexNow->observe($class);
         }

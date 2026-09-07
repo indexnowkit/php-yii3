@@ -46,8 +46,20 @@ First release: the Yii3 adapter of the family (spec 15), on `indexnowkit/core` 0
   `.env` of `key:generate`, and the stubs of `indexnowkit/console` under the same names without the package (the
   install line, exit 1). A service built with `sitemapInstalled: false` / `historyInstalled: false` while the package
   is installed gets the stub too — from the container, never from a check inside a command. `Check\SampleOptions` of
-  `di.php` carries the `RecordSampler` for `--sample-class`; `Wiring::debounceStoreDescription()` is the store line of
-  `indexnow:status`.
+  `di.php` carries the `Console\SubjectSampler` of `indexnowkit/console` for `--sample-class`;
+  `Wiring::debounceStoreDescription()` is the store line of `indexnow:status`, the text of
+  `History\Adapter\HistoryServices::describeStore()` shared with Laravel and Yii2 (wave M, spec 19).
+- **Wave M** (spec 19), before the first release: `ActiveRecord\ActiveRecordLoader` extends `Console\AbstractSubjectLoader`
+  of `indexnowkit/console` (the batched `findMany()` is what is Yii's); `Url\YiiRouteUrlResolver` decides the locale
+  expansion, the pinned origin and the exceptions through the core's `Url\RouteOrigin` and takes the graph's logger,
+  so `locales: 'all'` over an empty `router.locales` is warned about once per process; `Check\CacheProbe` writes the
+  core's `DebounceStoreCheck::PROBE_KEY` (the package's own `KEY` constant is gone); the transport is built over the
+  container's PSR-17 factories when it has them (`TransportFactory::lazy(…, requestFactory:, streamFactory:)` — a
+  `yiisoft/app` application binds `Psr\Http\Message\RequestFactoryInterface` and `StreamFactoryInterface`), so
+  `php-http/discovery` is consulted only without them; `ActiveRecord\ObserverProvider::set()` takes the PSR-3 logger
+  as an appended optional parameter (the bootstrap passes the package's), and a save without an observer after that
+  is one PSR-3 warning instead of an E_USER_WARNING (which stays the path before any bootstrap ran);
+  `Config\ConfigFactory` folds the packages' options through `OptionalPackage::ownedOptions()` / `ignoredBlocks()`.
 - **Checks** in `indexnow:check`: `dispatch.mode`, `debounce.store` (the core check with a container probe),
   `router.key_file` / `router.route`, `router.base_url` (a web request whose host differs from `base_url`),
   `active_record.enabled`, plus the lines of the optional packages (`Check\SampleGateCheck` of the core for
