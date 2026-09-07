@@ -108,6 +108,16 @@ Every `Result` is also dispatched to the container's PSR-14 `EventDispatcherInte
 are the `IndexNowKit\Console\*Runner` of `indexnowkit/console` (`di-console.php`), so a tenant loop over
 `SubmitSubjectsRunner` is a ten-line command of your own.
 
+The commands themselves are classes of the packages, not of this one: `IndexNowKit\Console\Command\*`
+(`indexnowkit/console`), `IndexNowKit\Sitemap\Console\SitemapCommand`, `IndexNowKit\History\Console\HistoryCommand` and
+`StatusCommand` — `params-console.php` maps the names to them, `di-console.php` gives them their runners, the
+`ConfigSourceInterface` (`Console\ConfigSource` over the facade) and the `.env` of `key:generate`. To change what a
+command does, replace its runner definition in your `di/` (`SubmitSubjectsRunner::class => MyTenantLoop::class`); to
+replace a command outright, map the name to your class in your own `params-console.php` (the application's params
+win) and give it the same inputs with `Definitions::submit()->applyTo($this)`. The key file route is the core's
+`Key\KeyFileRequestHandler` behind `Http\KeyFileHandler` (`di-web.php`): replace the former to serve the file from
+another key source, the route and the `{key}` pattern stay.
+
 ## What is the core's
 
 The observer keeps only what is Yii3's: the change set from the old-value snapshot of `BeforeUpdate`, the previous

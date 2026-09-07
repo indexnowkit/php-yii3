@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace IndexNowKit\Yii3\Tests\Feature;
 
+use IndexNowKit\Console\Command\CheckCommand;
+use IndexNowKit\Console\Command\ConfigCommand;
 use IndexNowKit\Console\ExitCode;
+use IndexNowKit\History\Console\HistoryCommand;
+use IndexNowKit\History\Console\StatusCommand;
 use IndexNowKit\History\Pdo\Schema;
 use IndexNowKit\Http\Response;
-use IndexNowKit\Yii3\Console\CheckCommand;
-use IndexNowKit\Yii3\Console\ConfigCommand;
-use IndexNowKit\Yii3\Console\HistoryCommand;
-use IndexNowKit\Yii3\Console\StatusCommand;
 use IndexNowKit\Yii3\Tests\Yii3TestCase;
 use PHPUnit\Framework\Attributes\TestDox;
 

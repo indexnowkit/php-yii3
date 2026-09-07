@@ -33,7 +33,7 @@
     "require": {
         "php": "^8.2",
         "ext-json": "*",
-        "indexnowkit/console": "^0.4",
+        "indexnowkit/console": "^0.5",
         "indexnowkit/core": "^0.13",
         "psr/container": "^1.1 || ^2.0",
         "psr/event-dispatcher": "^1.0",
@@ -49,7 +49,7 @@
         "yiisoft/router": "^4.0"
     },
     "require-dev": {
-        "indexnowkit/history": "^0.3.1",
+        "indexnowkit/history": "^0.4",
         "indexnowkit/sitemap": "^0.8",
         "indexnowkit/testing": "^0.3",
         "indexnowkit/verify": "^0.4",
@@ -69,14 +69,14 @@
         "yiisoft/yii-http": "^1.1"
     },
     "conflict": {
-        "indexnowkit/history": "<0.3.1",
+        "indexnowkit/history": "<0.4",
         "indexnowkit/sitemap": "<0.8",
         "indexnowkit/verify": "<0.4"
     },
     "suggest": {
         "indexnowkit/sitemap": "The indexnow:sitemap command (^0.8)",
         "indexnowkit/verify": "Pre-flight GET of every URL before submission — noindex, robots.txt, canonical, redirects (^0.4; verify.enabled: true)",
-        "indexnowkit/history": "Submission history in the PSR-16 cache or a database table, the indexnow:history and indexnow:status commands (^0.3.1; history.store: psr16|pdo)",
+        "indexnowkit/history": "Submission history in the PSR-16 cache or a database table, the indexnow:history and indexnow:status commands (^0.4; history.store: psr16|pdo)",
         "yiisoft/config": "Picks up the package's config/*.php (params, di, routes, events, bootstrap, commands) without any wiring in the application",
         "yiisoft/yii-http": "The AfterEmit event the package flushes on after the response is sent",
         "yiisoft/yii-console": "The console application the indexnow:* commands are registered in (params-console)",

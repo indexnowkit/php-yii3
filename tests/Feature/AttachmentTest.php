@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace IndexNowKit\Yii3\Tests\Feature;
 
 use IndexNowKit\Attribute\IndexNow as IndexNowRule;
+use IndexNowKit\Console\Command\CheckCommand;
 use IndexNowKit\Yii3\ActiveRecord\IndexNowObserver;
 use IndexNowKit\Yii3\ActiveRecord\ObserverProvider;
-use IndexNowKit\Yii3\Console\CheckCommand;
 use IndexNowKit\Yii3\Event\ObservedDispatcher;
 use IndexNowKit\Yii3\IndexNow;
 use IndexNowKit\Yii3\Tests\Fixtures\ModelPost;

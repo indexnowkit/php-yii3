@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace IndexNowKit\Yii3\Tests\Feature;
 
+use IndexNowKit\Console\Command\CheckCommand;
 use IndexNowKit\Console\ExitCode;
 use IndexNowKit\Http\Response;
 use IndexNowKit\Submitter;
 use IndexNowKit\Verify\VerifyingSubmitterFactory;
 use IndexNowKit\Yii3\Config\ConfigFactory;
-use IndexNowKit\Yii3\Console\CheckCommand;
 use IndexNowKit\Yii3\Tests\Fixtures\Post;
 use IndexNowKit\Yii3\Tests\Yii3TestCase;
 use LogicException;

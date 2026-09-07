@@ -35,6 +35,7 @@ use IndexNowKit\Url\UrlNormalizerInterface;
 use IndexNowKit\Url\UrlResolverInterface;
 use IndexNowKit\Yii3\ActiveRecord\ActiveRecordLoader;
 use IndexNowKit\Yii3\ActiveRecord\IndexNowObserver;
+use IndexNowKit\Yii3\Check\RecordSampler;
 use IndexNowKit\Yii3\IndexNow;
 use IndexNowKit\Yii3\Wiring;
 use Psr\Clock\ClockInterface;
@@ -100,5 +101,12 @@ return [
     Vocabulary::class => static fn(): Vocabulary => IndexNow::vocabulary(),
     SubjectLoaderInterface::class => static fn(IndexNow $indexNow): SubjectLoaderInterface => new ActiveRecordLoader($indexNow->namespaces()),
     ResultFormatterInterface::class => ResultRenderer::class,
-    SampleOptions::class => SampleOptions::class,
+    // the --sample / --sample-class holder of `indexnow:check`, the record sampler already inside: the check command
+    // of indexnowkit/console writes the options into it and knows nothing of ActiveRecord
+    SampleOptions::class => static function (SubjectLoaderInterface $records, IndexNow $indexNow): SampleOptions {
+        $samples = new SampleOptions();
+        $samples->sampler = static fn(string $class, ?string $id): array => (new RecordSampler($records, $indexNow->kit()))($class, $id);
+
+        return $samples;
+    },
 ];

@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace IndexNowKit\Yii3\Tests\Feature;
 
+use IndexNowKit\Console\Command\CheckCommand;
+use IndexNowKit\Console\Command\SitemapNotInstalledCommand;
+use IndexNowKit\Console\Command\SubmitCommand;
 use IndexNowKit\Console\ExitCode;
+use IndexNowKit\Sitemap\Console\SitemapCommand;
 use IndexNowKit\Yii3\Config\ConfigFactory;
-use IndexNowKit\Yii3\Console\CheckCommand;
-use IndexNowKit\Yii3\Console\SitemapCommand;
-use IndexNowKit\Yii3\Console\SitemapNotInstalledCommand;
-use IndexNowKit\Yii3\Console\SubmitCommand;
 use IndexNowKit\Yii3\Tests\Yii3TestCase;
 use LogicException;
 use PHPUnit\Framework\Attributes\TestDox;

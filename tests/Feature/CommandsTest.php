@@ -4,16 +4,16 @@ declare(strict_types=1);
 
 namespace IndexNowKit\Yii3\Tests\Feature;
 
+use IndexNowKit\Console\Command\CheckCommand;
+use IndexNowKit\Console\Command\ConfigCommand;
+use IndexNowKit\Console\Command\ExplainCommand;
+use IndexNowKit\Console\Command\KeyGenerateCommand;
+use IndexNowKit\Console\Command\SubmitCommand;
+use IndexNowKit\Console\Command\SubmitSubjectsCommand;
 use IndexNowKit\Http\Response;
 use IndexNowKit\Key\KeyValidator;
+use IndexNowKit\Sitemap\Console\SitemapCommand;
 use IndexNowKit\Testing\Conformance\CheckOutputAssertions;
-use IndexNowKit\Yii3\Console\CheckCommand;
-use IndexNowKit\Yii3\Console\ConfigCommand;
-use IndexNowKit\Yii3\Console\ExplainCommand;
-use IndexNowKit\Yii3\Console\KeyGenerateCommand;
-use IndexNowKit\Yii3\Console\SitemapCommand;
-use IndexNowKit\Yii3\Console\SubmitCommand;
-use IndexNowKit\Yii3\Console\SubmitRecordCommand;
 use IndexNowKit\Yii3\Tests\Fixtures\ModelPost;
 use IndexNowKit\Yii3\Tests\Fixtures\Post;
 use IndexNowKit\Yii3\Tests\Yii3TestCase;
@@ -147,22 +147,22 @@ final class CommandsTest extends Yii3TestCase
         $this->kit()->flush();
         $this->transport->posts = [];
 
-        [$code, $output] = $this->yii(SubmitRecordCommand::class, ['class' => 'Post']);
+        [$code, $output] = $this->yii(SubmitSubjectsCommand::class, ['class' => 'Post']);
         self::assertSame(0, $code, $output);
         self::assertStringContainsString('3 records -> 2 URL(s)', $output);
         self::assertEqualsCanonicalizing(['https://www.example.com/posts/one', 'https://www.example.com/posts/two'], $this->sentUrls());
 
-        [$code, $output] = $this->yii(SubmitRecordCommand::class, ['class' => 'Post', 'ids' => ['1'], '--explain' => true]);
+        [$code, $output] = $this->yii(SubmitSubjectsCommand::class, ['class' => 'Post', 'ids' => ['1'], '--explain' => true]);
         self::assertSame(0, $code);
         self::assertStringContainsString('https://www.example.com/posts/one', $output);
         self::assertCount(1, $this->transport->posts, '--explain sends nothing');
 
-        [$code, $output] = $this->yii(SubmitRecordCommand::class, ['class' => 'Post', 'ids' => ['999']]);
+        [$code, $output] = $this->yii(SubmitSubjectsCommand::class, ['class' => 'Post', 'ids' => ['999']]);
         self::assertSame(2, $code);
         self::assertStringContainsString('not found', $output);
-        [$code] = $this->yii(SubmitRecordCommand::class, ['class' => 'Nope']);
+        [$code] = $this->yii(SubmitSubjectsCommand::class, ['class' => 'Nope']);
         self::assertSame(2, $code);
-        [$code, $output] = $this->yii(SubmitRecordCommand::class, ['class' => 'Post', '--event' => 'moved']);
+        [$code, $output] = $this->yii(SubmitSubjectsCommand::class, ['class' => 'Post', '--event' => 'moved']);
         self::assertSame(2, $code);
         self::assertStringContainsString('--event must be', $output);
     }

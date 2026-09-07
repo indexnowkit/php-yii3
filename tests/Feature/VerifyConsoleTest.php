@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace IndexNowKit\Yii3\Tests\Feature;
 
+use IndexNowKit\Console\Command\CheckCommand;
+use IndexNowKit\Console\Command\ConfigCommand;
 use IndexNowKit\Console\ExitCode;
 use IndexNowKit\Http\Response;
-use IndexNowKit\Yii3\Console\CheckCommand;
-use IndexNowKit\Yii3\Console\ConfigCommand;
-use IndexNowKit\Yii3\Console\SitemapCommand;
+use IndexNowKit\Sitemap\Console\SitemapCommand;
 use IndexNowKit\Yii3\Tests\Fixtures\Post;
 use IndexNowKit\Yii3\Tests\Yii3TestCase;
 use PHPUnit\Framework\Attributes\TestDox;

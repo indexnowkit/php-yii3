@@ -48,6 +48,8 @@ use Psr\Clock\ClockInterface;
 use Psr\Container\ContainerInterface;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Psr\SimpleCache\CacheInterface as Psr16;
+use ReflectionClass;
+use Throwable;
 use Yiisoft\Db\Connection\ConnectionInterface;
 use Yiisoft\Db\Driver\Pdo\PdoConnectionInterface;
 use Yiisoft\Router\CurrentRoute;
@@ -230,6 +232,25 @@ final class Wiring
         }
 
         return $checks;
+    }
+
+    /**
+     * The debounce store as `./yii indexnow:status` describes it: `memory`, `none`, or `<container id> (<class>)` of
+     * the PSR-16 cache behind `debounce.store` (`missing` when the container has no such id).
+     */
+    public function debounceStoreDescription(): string
+    {
+        $store = $this->indexNow->config()->debounceStore ?? IndexNow::DEFAULT_DEBOUNCE_STORE;
+        if (\in_array($store, [DebounceStoreFactory::MEMORY, DebounceStoreFactory::NONE], true)) {
+            return $store;
+        }
+        try {
+            $cache = $this->container->has($store) ? $this->container->get($store) : null;
+        } catch (Throwable) {
+            $cache = null;
+        }
+
+        return \sprintf('%s (%s)', $store, \is_object($cache) ? (new ReflectionClass($cache))->getShortName() : 'missing');
     }
 
     /** The `--sample` / `--sample-class` values of the running `indexnow:check`: one holder in the container, the command fills it. */

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace IndexNowKit\Yii3\Tests\Feature;
 
+use IndexNowKit\Console\Command\CheckCommand;
 use IndexNowKit\Testing\Conformance\KeyFileAssertions;
-use IndexNowKit\Yii3\Console\CheckCommand;
 use IndexNowKit\Yii3\Tests\Support\Fixtures;
 use IndexNowKit\Yii3\Tests\Support\Web;
 use IndexNowKit\Yii3\Tests\Yii3TestCase;

@@ -33,11 +33,21 @@ First release: the Yii3 adapter of the family (spec 15), on `indexnowkit/core` 0
   web request, `base_url` in the console, `hosts.<host>.base_url` for `host:` rules, the locale as the
   `router.locale_parameter` argument (`_language`).
 - **Key file** `Http\KeyFileHandler` (PSR-15) at `key_file.pattern` (`/{key:[A-Za-z0-9-]{8,128}}.txt`), route
-  `indexnow/key-file`; `Vary: Host` with a hosts map.
-- **Commands** over the runners of `indexnowkit/console`: `indexnow:check` (with `--sample` / `--sample-class`
-  through `indexnowkit/verify`), `indexnow:config`, `indexnow:submit`, `indexnow:submit-record`, `indexnow:explain`,
-  `indexnow:key:generate`; `indexnow:sitemap` (`indexnowkit/sitemap`), `indexnow:history` and `indexnow:status`
-  (`indexnowkit/history`), each with a stub that prints the install line and exits 1 without the package.
+  `indexnow/key-file`, over the core's `Key\KeyFileRequestHandler` (core 0.13.0, wave L): the handler hands the `{key}`
+  argument of the route to `respond()`, the core builds the PSR-7 response with `Config::keyFileHeaders()` (`Vary: Host`
+  with a hosts map).
+- **Commands**: the classes of `indexnowkit/console` 0.5 (`Console\Command\*`: `indexnow:check` with `--sample` /
+  `--sample-class` through `indexnowkit/verify`, `indexnow:config`, `indexnow:submit`, `indexnow:submit-record` as
+  `SubmitSubjectsCommand` named by the vocabulary, `indexnow:explain`, `indexnow:key:generate`), of `indexnowkit/sitemap`
+  0.8 (`indexnow:sitemap`) and of `indexnowkit/history` 0.4 (`indexnow:history`, `indexnow:status`) — the same classes
+  the Symfony bundle registers (wave L, spec 18). `config/params-console.php` maps the names, `config/di-console.php`
+  wires what varies: the runners as definitions (`SitemapRunner`, `HistoryRunner`, `StatusRunner` when the package is
+  installed), `Console\ConfigSource` (a `ConfigSourceInterface` over the facade: what `check` and `config` read), the
+  `.env` of `key:generate`, and the stubs of `indexnowkit/console` under the same names without the package (the
+  install line, exit 1). A service built with `sitemapInstalled: false` / `historyInstalled: false` while the package
+  is installed gets the stub too — from the container, never from a check inside a command. `Check\SampleOptions` of
+  `di.php` carries the `RecordSampler` for `--sample-class`; `Wiring::debounceStoreDescription()` is the store line of
+  `indexnow:status`.
 - **Checks** in `indexnow:check`: `dispatch.mode`, `debounce.store` (the core check with a container probe),
   `router.key_file` / `router.route`, `router.base_url` (a web request whose host differs from `base_url`),
   `active_record.enabled`, plus the lines of the optional packages (`Check\SampleGateCheck` of the core for

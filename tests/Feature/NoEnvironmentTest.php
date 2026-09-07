@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace IndexNowKit\Yii3\Tests\Feature;
 
+use IndexNowKit\Console\Command\CheckCommand;
 use IndexNowKit\Console\ExitCode;
 use IndexNowKit\Http\Response;
-use IndexNowKit\Yii3\Console\CheckCommand;
 use IndexNowKit\Yii3\Env;
 use IndexNowKit\Yii3\Tests\Support\Fixtures;
 use IndexNowKit\Yii3\Tests\Yii3TestCase;
